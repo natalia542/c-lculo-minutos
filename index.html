@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HACKEA — Calculadora de Recursos Educativos</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #FAFAFA; font-family: 'Poppins', sans-serif; }
+  input[type=number] { -moz-appearance: textfield; }
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useCallback } = React;
+
+const SEED = [
+  {id:1,prog:"MBA",ciclo:1,nombre:"Taller de emprendimiento",uni:4,hAsync:15,hApoyo:12,doc:"Vanessa Nowak"},
+  {id:2,prog:"MBA",ciclo:1,nombre:"Marketing y comportamiento del consumidor",uni:4,hAsync:15,hApoyo:12,doc:"Luciana De Araujo"},
+  {id:3,prog:"MBA",ciclo:1,nombre:"Gestión de talento humano",uni:5,hAsync:15,hApoyo:12,doc:"Olivia Brito"},
+  {id:4,prog:"MBA",ciclo:1,nombre:"Economía gerencial",uni:4,hAsync:15,hApoyo:12,doc:"Héctor Meyer"},
+  {id:5,prog:"MBA",ciclo:1,nombre:"Empresa y sustentabilidad (MBA)",uni:4,hAsync:12,hApoyo:12,doc:"Jorge Hirmas"},
+  {id:6,prog:"MCG",ciclo:1,nombre:"Planificación estratégica",uni:4,hAsync:12,hApoyo:12,doc:"Rafael Hernandez"},
+  {id:7,prog:"MCG",ciclo:1,nombre:"Planificación de marketing estratégico",uni:4,hAsync:12,hApoyo:12,doc:"Luciana de Araujo"},
+  {id:8,prog:"MCG",ciclo:1,nombre:"Contabilidad gerencial",uni:3,hAsync:12,hApoyo:12,doc:"Andrés Nuñez"},
+  {id:9,prog:"MCG",ciclo:1,nombre:"Planeación presupuestaria",uni:3,hAsync:12,hApoyo:12,doc:"Cristian Coser"},
+  {id:10,prog:"MCG",ciclo:1,nombre:"Empresa y sustentabilidad (MCG)",uni:4,hAsync:12,hApoyo:12,doc:"Jorge Hirmas"},
+  {id:11,prog:"MCEE",ciclo:1,nombre:"Teorías y enfoques prácticos del currículum",uni:2,hAsync:24,hApoyo:12,doc:"Cecilia Prieto"},
+  {id:12,prog:"MCEE",ciclo:1,nombre:"Diseño, desarrollo y gestión curricular",uni:3,hAsync:24,hApoyo:12,doc:"Cecilia Prieto"},
+  {id:13,prog:"MCEE",ciclo:1,nombre:"Evaluación para el aprendizaje",uni:4,hAsync:40,hApoyo:12,doc:"Luis Espinoza"},
+  {id:14,prog:"MCEE",ciclo:1,nombre:"Diversidad, inclusión y equidad educativa",uni:4,hAsync:12,hApoyo:12,doc:"Katherine Dinamarca"},
+  {id:15,prog:"MBA",ciclo:2,nombre:"Contabilidad para la toma de decisiones",uni:5,hAsync:15,hApoyo:12,doc:"Felipe Zúñiga"},
+  {id:16,prog:"MBA",ciclo:2,nombre:"Dirección de la Innovación",uni:4,hAsync:15,hApoyo:12,doc:"Rodrigo Díaz"},
+  {id:17,prog:"MBA",ciclo:2,nombre:"Finanzas para la toma de decisiones",uni:4,hAsync:15,hApoyo:12,doc:"Carlos Gómez"},
+  {id:18,prog:"MBA",ciclo:2,nombre:"Transformación Digital e Inteligencia de Negocios",uni:4,hAsync:15,hApoyo:12,doc:"Fabian Palma"},
+  {id:19,prog:"MCG",ciclo:2,nombre:"Control estratégico",uni:2,hAsync:12,hApoyo:12,doc:"Juan Francisco Cobo"},
+  {id:20,prog:"MCG",ciclo:2,nombre:"Tecnología para el control de gestión",uni:4,hAsync:12,hApoyo:12,doc:"John Rios"},
+  {id:21,prog:"MCG",ciclo:2,nombre:"Dirección de la innovación (MCG)",uni:4,hAsync:12,hApoyo:12,doc:"Rodrigo Díaz"},
+  {id:22,prog:"MCG",ciclo:2,nombre:"Gestión y desarrollo organizacional",uni:4,hAsync:12,hApoyo:12,doc:"Barbara Valenzuela"},
+  {id:23,prog:"MCG",ciclo:2,nombre:"Control y riesgo operacional",uni:4,hAsync:12,hApoyo:12,doc:"Juan Pablo Seiffert"},
+  {id:24,prog:"MCEE",ciclo:2,nombre:"Taller de evaluación formativa y retroalimentación",uni:4,hAsync:40,hApoyo:12,doc:"Mónica Flores"},
+  {id:25,prog:"MCEE",ciclo:2,nombre:"Taller de estrategias para la diversificación",uni:4,hAsync:24,hApoyo:12,doc:"Juan Jesús Torres"},
+  {id:26,prog:"MCEE",ciclo:2,nombre:"Trabajo colaborativo interprofesional",uni:3,hAsync:12,hApoyo:12,doc:"Katherine Dinamarca"},
+  {id:27,prog:"MCEE",ciclo:2,nombre:"Investigación educativa y gestión de proyecto",uni:3,hAsync:40,hApoyo:12,doc:"Marcos López"},
+  {id:28,prog:"OPT",ciclo:2,nombre:"IA, Creatividad y Ética",uni:3,hAsync:36,hApoyo:0,doc:"Joaquim Giannotti"},
+  {id:29,prog:"OPT",ciclo:2,nombre:"Datos, Visualización y Decisiones",uni:4,hAsync:36,hApoyo:0,doc:"Fabián Palma"},
+  {id:30,prog:"OPT",ciclo:2,nombre:"Introducción al Diseño de servicios",uni:4,hAsync:36,hApoyo:0,doc:"Beatriz Hasbún"},
+];
+
+function buildSubject(s) {
+  const units = [];
+  for (let i = 0; i < s.uni; i++) {
+    units.push({ orient:2, videoClase:12, infografia:12, biblio:0, formativo:15, sumativo:60 });
+  }
+  return { ...s, bienvenida:3, pagClase:Math.round((s.hAsync+s.hApoyo)*40*0.6/7.5), conclusion:2, complementarios:0, units, examen:60 };
+}
+
+const HP = 40;
+function totalMin(a) {
+  let t = a.bienvenida + a.pagClase*7.5 + a.conclusion + a.complementarios;
+  a.units.forEach(u => { t += u.orient+u.videoClase+u.infografia+u.biblio+u.formativo+u.sumativo; });
+  return t + a.examen;
+}
+function tgt(a) { return (a.hAsync+a.hApoyo)*HP; }
+function pc(a) { const g=tgt(a); return g>0?totalMin(a)/g*100:0; }
+
+const N = ({v,onChange,w=52,accent=false}) => (
+  <input type="number" value={v} onChange={e=>onChange(Number(e.target.value)||0)}
+    style={{width:w,border:"1px solid "+(accent?"#0090F8":"#ddd"),borderRadius:4,padding:"3px 4px",fontSize:12,textAlign:"right",background:accent?"#F0F8FF":"#fff",fontFamily:"inherit",fontWeight:accent?600:400}} />
+);
+
+function Badge({p}) {
+  const [bg,fg,lb] = p<95?["#FEE2E2","#991B1B","Bajo"]:p<=115?["#D1FAE5","#065F46","OK"]:["#FEF3C7","#92400E","Excede"];
+  return <span style={{background:bg,color:fg,padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{lb} {p.toFixed(0)}%</span>;
+}
+
+function Bar({p}) {
+  const c = p<95?"#EF4444":p<=115?"#0090F8":"#F59E0B";
+  return (
+    <div style={{height:6,background:"#EBECF0",borderRadius:3,position:"relative",margin:"4px 0"}}>
+      <div style={{width:`${Math.min(p,130)/1.3}%`,height:"100%",background:c,borderRadius:3,transition:"width .3s"}} />
+      <div style={{position:"absolute",left:`${100/1.3}%`,top:-2,width:2,height:10,background:"#2A2A2A",opacity:.25,borderRadius:1}} />
+    </div>
+  );
+}
+
+const PCOL = {MBA:"#0090F8",MCG:"#404040",MCEE:"#0090F8",OPT:"#666"};
+
+function App() {
+  const [data, setData] = useState(() => SEED.map(buildSubject));
+  const [tab, setTab] = useState(0);
+  const [fProg, setFProg] = useState("Todos");
+  const [fCiclo, setFCiclo] = useState("Todos");
+  const [open, setOpen] = useState(null);
+
+  const filtered = useMemo(() => data.filter(a =>
+    (fProg==="Todos"||a.prog===fProg) && (fCiclo==="Todos"||a.ciclo===Number(fCiclo))
+  ),[data,fProg,fCiclo]);
+
+  const upd = useCallback((id, fn) => setData(d => d.map(a => a.id===id ? fn({...a, units:[...a.units.map(u=>({...u}))]}) : a)),[]);
+  const progs = [...new Set(data.map(a=>a.prog))];
+
+  return (
+    <div style={{maxWidth:1100,margin:"0 auto",padding:"20px 16px",minHeight:"100vh"}}>
+
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:24}}>
+        <div style={{width:32,height:32,borderRadius:"50%",border:"2.5px solid #0090F8",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{width:8,height:8,borderRadius:"50%",border:"2px solid #0090F8"}} />
+        </div>
+        <div>
+          <span style={{fontSize:17,fontWeight:700,color:"#2A2A2A",letterSpacing:.5}}>HACK<span style={{color:"#0090F8"}}>EA</span></span>
+          <span style={{fontSize:11,color:"#999",marginLeft:8}}>Calculadora de Recursos Educativos</span>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",gap:0,borderBottom:"2px solid #EBECF0",marginBottom:16}}>
+        {["Minutos de consumo","Páginas contenidista","Costos"].map((t,i) => (
+          <button key={i} onClick={()=>setTab(i)} style={{padding:"8px 20px",fontSize:13,fontWeight:tab===i?600:400,color:tab===i?"#0090F8":"#999",borderBottom:tab===i?"2px solid #0090F8":"2px solid transparent",background:"none",border:"none",cursor:"pointer",marginBottom:-2,fontFamily:"inherit"}}>{t}</button>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{display:"flex",gap:10,marginBottom:16,fontSize:12,alignItems:"center"}}>
+        <select value={fProg} onChange={e=>setFProg(e.target.value)} style={{padding:"4px 8px",borderRadius:5,border:"1px solid #ddd",fontSize:12,fontFamily:"inherit"}}>
+          <option value="Todos">Todos los programas</option>
+          {progs.map(p=><option key={p}>{p}</option>)}
+        </select>
+        <select value={fCiclo} onChange={e=>setFCiclo(e.target.value)} style={{padding:"4px 8px",borderRadius:5,border:"1px solid #ddd",fontSize:12,fontFamily:"inherit"}}>
+          <option value="Todos">Todos los ciclos</option>
+          <option value="1">Ciclo 1</option><option value="2">Ciclo 2</option>
+        </select>
+        <span style={{color:"#aaa",marginLeft:"auto"}}>{filtered.length} asignaturas</span>
+      </div>
+
+      {/* ═══ TAB 0: MINUTOS ═══ */}
+      {tab===0 && filtered.map(a => {
+        const tm=totalMin(a), tg2=tgt(a), p=pc(a), isO=open===a.id;
+        const minTr = a.bienvenida+a.pagClase*7.5+a.conclusion+a.complementarios;
+        const minU = a.units.reduce((s,u)=>s+u.orient+u.videoClase+u.infografia+u.biblio+u.formativo+u.sumativo,0);
+        return (
+          <div key={a.id} style={{background:"#fff",borderRadius:10,border:"1px solid #EBECF0",marginBottom:8,overflow:"hidden"}}>
+            <div onClick={()=>setOpen(isO?null:a.id)} style={{display:"grid",gridTemplateColumns:"36px 1fr 90px 100px 70px",gap:6,padding:"10px 16px",alignItems:"center",cursor:"pointer",background:isO?"#FAFBFF":"#fff"}}>
+              <span style={{fontSize:9,color:"#fff",background:PCOL[a.prog]||"#888",borderRadius:3,padding:"2px 0",textAlign:"center",fontWeight:700}}>{a.prog}</span>
+              <div>
+                <div style={{fontSize:13,fontWeight:500,color:"#2A2A2A"}}>{a.nombre}</div>
+                <div style={{fontSize:10,color:"#999"}}>C{a.ciclo} · {a.uni} unid · {a.hAsync+a.hApoyo}h async · {a.doc}</div>
+              </div>
+              <div style={{textAlign:"right"}}><span style={{fontSize:14,fontWeight:700}}>{tm.toFixed(0)}</span><span style={{fontSize:10,color:"#999"}}> / {tg2}</span></div>
+              <Bar p={p} />
+              <Badge p={p} />
+            </div>
+            {isO && (
+              <div style={{padding:"0 16px 16px",background:"#FAFBFF"}}>
+                <div style={{display:"flex",gap:16,marginBottom:12,fontSize:12,flexWrap:"wrap"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>Unidades: <N v={a.uni} w={40} onChange={v=>upd(a.id,x=>{const d=v-x.uni;if(d>0)for(let i=0;i<d;i++)x.units.push({orient:2,videoClase:12,infografia:12,biblio:0,formativo:15,sumativo:60});if(d<0)x.units=x.units.slice(0,v);x.uni=v;return x;})} /></label>
+                  <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>Hrs async Hackea: <N v={a.hAsync} w={44} onChange={v=>upd(a.id,x=>{x.hAsync=v;return x;})} /></label>
+                  <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>Hrs async apoyo: <N v={a.hApoyo} w={44} onChange={v=>upd(a.id,x=>{x.hApoyo=v;return x;})} /></label>
+                </div>
+                <div style={{fontSize:11,fontWeight:600,color:"#0090F8",marginBottom:4,borderBottom:"1px solid #E0E7F0",paddingBottom:4}}>Recursos generales de la asignatura</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 60px 70px",gap:"2px 8px",fontSize:12,marginBottom:8,alignItems:"center"}}>
+                  <span style={{color:"#666"}}>Video de bienvenida</span><N v={a.bienvenida} onChange={v=>upd(a.id,x=>{x.bienvenida=v;return x;})} /><span style={{textAlign:"right",color:"#888"}}>{a.bienvenida} min</span>
+                  <span style={{color:"#666"}}>Clase escrita (páginas)</span><N v={a.pagClase} accent onChange={v=>upd(a.id,x=>{x.pagClase=v;return x;})} /><span style={{textAlign:"right",fontWeight:600,color:"#0090F8"}}>{(a.pagClase*7.5).toFixed(0)} min</span>
+                  <span style={{color:"#666"}}>Conclusión y cierre</span><N v={a.conclusion} onChange={v=>upd(a.id,x=>{x.conclusion=v;return x;})} /><span style={{textAlign:"right",color:"#888"}}>{a.conclusion} min</span>
+                  <span style={{color:"#666"}}>Recursos complementarios</span><N v={a.complementarios} onChange={v=>upd(a.id,x=>{x.complementarios=v;return x;})} /><span style={{textAlign:"right",color:"#888"}}>{a.complementarios} min</span>
+                  <span style={{fontWeight:600,color:"#444"}}>Subtotal general</span><span></span><span style={{textAlign:"right",fontWeight:700}}>{minTr.toFixed(0)} min</span>
+                </div>
+                {a.units.map((u,i) => {
+                  const uT=u.orient+u.videoClase+u.infografia+u.biblio+u.formativo+u.sumativo;
+                  return (
+                    <div key={i}>
+                      <div style={{fontSize:11,fontWeight:600,color:"#2A2A2A",marginBottom:4,marginTop:6,borderBottom:"1px solid #eee",paddingBottom:3}}>Unidad {i+1} <span style={{fontWeight:400,color:"#aaa",marginLeft:6}}>{uT} min</span></div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 60px 70px",gap:"2px 8px",fontSize:12,alignItems:"center",marginBottom:4}}>
+                        <span style={{color:"#666"}}>Orientaciones</span><N v={u.orient} onChange={v=>upd(a.id,x=>{x.units[i].orient=v;return x;})} /><span style={{textAlign:"right",color:"#888"}}>{u.orient} min</span>
+                        <span style={{color:"#666"}}>Video clase</span><N v={u.videoClase} onChange={v=>upd(a.id,x=>{x.units[i].videoClase=v;return x;})} /><span style={{textAlign:"right",color:"#888"}}>{u.videoClase} min</span>
+                        <span style={{color:"#666"}}>Infografía</span><N v={u.infografia} onChange={v=>upd(a.id,x=>{x.units[i].infografia=v;return x;})} /><span style={{textAlign:"right",color:"#888"}}>{u.infografia} min</span>
+                        <span style={{color:"#666"}}>Bibliografía obligatoria</span><N v={u.biblio} onChange={v=>upd(a.id,x=>{x.units[i].biblio=v;return x;})} /><span style={{textAlign:"right",color:"#888"}}>{u.biblio} min</span>
+                        <span style={{color:"#666"}}>Trab. formativo</span><N v={u.formativo} onChange={v=>upd(a.id,x=>{x.units[i].formativo=v;return x;})} /><span style={{textAlign:"right",color:"#888"}}>{u.formativo} min</span>
+                        <span style={{color:"#666"}}>Trab. sumativo</span><N v={u.sumativo} onChange={v=>upd(a.id,x=>{x.units[i].sumativo=v;return x;})} /><span style={{textAlign:"right",color:"#888"}}>{u.sumativo} min</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{fontSize:11,fontWeight:600,color:"#2A2A2A",marginTop:8,marginBottom:4,borderBottom:"1px solid #eee",paddingBottom:3}}>Examen final</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 60px 70px",gap:"2px 8px",fontSize:12,alignItems:"center",marginBottom:8}}>
+                  <span style={{color:"#666"}}>Examen — Trabajo de desarrollo</span><N v={a.examen} onChange={v=>upd(a.id,x=>{x.examen=v;return x;})} /><span style={{textAlign:"right",color:"#888"}}>{a.examen} min</span>
+                </div>
+                <div style={{background:"#fff",border:"1px solid #EBECF0",borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                  <div style={{fontSize:12}}><span style={{color:"#888"}}>General:</span> <b>{minTr.toFixed(0)}</b><span style={{color:"#ccc",margin:"0 6px"}}>+</span><span style={{color:"#888"}}>Unidades:</span> <b>{minU}</b><span style={{color:"#ccc",margin:"0 6px"}}>+</span><span style={{color:"#888"}}>Examen:</span> <b>{a.examen}</b></div>
+                  <div style={{fontSize:14,fontWeight:700}}>{tm.toFixed(0)} min <span style={{fontWeight:400,color:"#888",fontSize:12}}>/ {tg2} min</span></div>
+                  <div style={{fontSize:12}}><b>{(tm/HP).toFixed(1)}</b> <span style={{color:"#888"}}>hrs ped</span></div>
+                  <Badge p={p} />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ═══ TAB 1: PÁGINAS ═══ */}
+      {tab===1 && (
+        <div style={{background:"#fff",borderRadius:10,border:"1px solid #EBECF0",overflow:"hidden"}}>
+          <div style={{padding:"14px 16px",background:"#F8F9FA",borderBottom:"1px solid #EBECF0"}}>
+            <div style={{fontSize:14,fontWeight:600,color:"#2A2A2A"}}>Páginas de desarrollo — Contenidista</div>
+            <div style={{fontSize:11,color:"#888",marginTop:2}}>CC = clase escrita (editable). VC = 12 pág × unidades. Inf = 2.5 pág × unidades.</div>
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{background:"#F8F9FA"}}>
+                {["","Asignatura","U","Pág CC","Pág VC","Pág Inf","Total","Pág/U","Consumo"].map((h,i)=>(
+                  <th key={i} style={{padding:"8px 10px",textAlign:i<2?"left":"right",fontWeight:600,color:i===3?"#0090F8":"#666",fontSize:10,borderBottom:"1px solid #EBECF0"}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {filtered.map(a => {
+                  const pVC=12*a.uni, pInf=2.5*a.uni, pTot=a.pagClase+pVC+pInf;
+                  return (
+                    <tr key={a.id} style={{borderBottom:"1px solid #F5F5F5"}}>
+                      <td style={{padding:"6px 10px"}}><span style={{fontSize:9,color:"#fff",background:PCOL[a.prog]||"#888",borderRadius:3,padding:"1px 5px",fontWeight:700}}>{a.prog}</span></td>
+                      <td style={{padding:"6px 10px"}}><div style={{fontWeight:500,fontSize:12}}>{a.nombre}</div><div style={{fontSize:10,color:"#aaa"}}>C{a.ciclo} · {a.doc}</div></td>
+                      <td style={{textAlign:"right",padding:"6px 10px",color:"#666"}}>{a.uni}</td>
+                      <td style={{padding:"4px 6px"}}><N v={a.pagClase} w={50} accent onChange={v=>upd(a.id,x=>{x.pagClase=v;return x;})} /></td>
+                      <td style={{textAlign:"right",padding:"6px 10px",color:"#666"}}>{pVC}</td>
+                      <td style={{textAlign:"right",padding:"6px 10px",color:"#666"}}>{pInf}</td>
+                      <td style={{textAlign:"right",padding:"6px 10px",fontWeight:700}}>{pTot.toFixed(0)}</td>
+                      <td style={{textAlign:"right",padding:"6px 10px",color:"#888"}}>{(a.pagClase/a.uni).toFixed(0)}</td>
+                      <td style={{textAlign:"right",padding:"6px 10px"}}><Badge p={pc(a)}/></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot><tr style={{background:"#F8F9FA",fontWeight:700,fontSize:12}}>
+                <td colSpan={3} style={{padding:"10px"}}>Totales</td>
+                <td style={{textAlign:"right",padding:"10px",color:"#0090F8"}}>{filtered.reduce((s,a)=>s+a.pagClase,0)}</td>
+                <td style={{textAlign:"right",padding:"10px"}}>{filtered.reduce((s,a)=>s+12*a.uni,0)}</td>
+                <td style={{textAlign:"right",padding:"10px"}}>{filtered.reduce((s,a)=>s+2.5*a.uni,0)}</td>
+                <td style={{textAlign:"right",padding:"10px"}}>{filtered.reduce((s,a)=>s+a.pagClase+12*a.uni+2.5*a.uni,0).toFixed(0)}</td>
+                <td colSpan={2}></td>
+              </tr></tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ TAB 2: COSTOS ═══ */}
+      {tab===2 && (
+        <div style={{background:"#fff",borderRadius:10,border:"1px solid #EBECF0",overflow:"hidden"}}>
+          <div style={{padding:"14px 16px",background:"#F8F9FA",borderBottom:"1px solid #EBECF0"}}>
+            <div style={{fontSize:14,fontWeight:600,color:"#2A2A2A"}}>Proyección de costos</div>
+            <div style={{fontSize:11,color:"#888",marginTop:2}}>Páginas totales × USD $1.00 / página</div>
+          </div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{background:"#F8F9FA"}}>
+              {["","Asignatura","CC","VC","Inf","Total","USD"].map((h,i)=>(
+                <th key={i} style={{padding:"8px 10px",textAlign:i<2?"left":"right",fontWeight:600,color:i===6?"#0090F8":"#666",fontSize:10,borderBottom:"1px solid #EBECF0"}}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {filtered.map(a => {
+                const pVC=12*a.uni, pInf=2.5*a.uni, pTot=a.pagClase+pVC+pInf;
+                return (
+                  <tr key={a.id} style={{borderBottom:"1px solid #F5F5F5"}}>
+                    <td style={{padding:"6px 10px"}}><span style={{fontSize:9,color:"#fff",background:PCOL[a.prog]||"#888",borderRadius:3,padding:"1px 5px",fontWeight:700}}>{a.prog}</span></td>
+                    <td style={{padding:"6px 10px"}}><span style={{fontWeight:500,fontSize:12}}>{a.nombre}</span><br/><span style={{fontSize:10,color:"#aaa"}}>C{a.ciclo} · {a.uni}u</span></td>
+                    <td style={{textAlign:"right",padding:"6px 10px"}}>{a.pagClase}</td>
+                    <td style={{textAlign:"right",padding:"6px 10px"}}>{pVC}</td>
+                    <td style={{textAlign:"right",padding:"6px 10px"}}>{pInf}</td>
+                    <td style={{textAlign:"right",padding:"6px 10px",fontWeight:700}}>{pTot.toFixed(0)}</td>
+                    <td style={{textAlign:"right",padding:"6px 10px",fontWeight:700,color:"#0090F8"}}>${pTot.toFixed(0)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot><tr style={{background:"#F8F9FA",fontWeight:700}}>
+              <td colSpan={2} style={{padding:"10px"}}>Total</td>
+              <td style={{textAlign:"right",padding:"10px"}}>{filtered.reduce((s,a)=>s+a.pagClase,0)}</td>
+              <td style={{textAlign:"right",padding:"10px"}}>{filtered.reduce((s,a)=>s+12*a.uni,0)}</td>
+              <td style={{textAlign:"right",padding:"10px"}}>{filtered.reduce((s,a)=>s+2.5*a.uni,0)}</td>
+              <td style={{textAlign:"right",padding:"10px"}}>{filtered.reduce((s,a)=>s+a.pagClase+12*a.uni+2.5*a.uni,0).toFixed(0)}</td>
+              <td style={{textAlign:"right",padding:"10px",color:"#0090F8",fontSize:15}}>${filtered.reduce((s,a)=>s+a.pagClase+12*a.uni+2.5*a.uni,0).toFixed(0)}</td>
+            </tr></tfoot>
+          </table>
+          <div style={{padding:16,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
+            {[...new Set(filtered.map(a=>a.prog))].map(prog => {
+              const pd=filtered.filter(a=>a.prog===prog);
+              const tp=pd.reduce((s,a)=>s+a.pagClase+12*a.uni+2.5*a.uni,0);
+              return (<div key={prog} style={{background:"#F8F9FA",borderRadius:8,padding:14,borderLeft:`3px solid ${PCOL[prog]}`}}>
+                <div style={{fontSize:11,fontWeight:700,color:PCOL[prog]}}>{prog}</div>
+                <div style={{fontSize:22,fontWeight:700,color:"#2A2A2A"}}>${tp.toFixed(0)}</div>
+                <div style={{fontSize:10,color:"#999"}}>{pd.length} asig · {tp.toFixed(0)} pág</div>
+              </div>);
+            })}
+            <div style={{background:"#2A2A2A",borderRadius:8,padding:14,borderLeft:"3px solid #0090F8"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#0090F8"}}>TOTAL</div>
+              <div style={{fontSize:22,fontWeight:700,color:"#fff"}}>${filtered.reduce((s,a)=>s+a.pagClase+12*a.uni+2.5*a.uni,0).toFixed(0)}</div>
+              <div style={{fontSize:10,color:"#888"}}>{filtered.length} asignaturas</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{marginTop:24,textAlign:"center",fontSize:10,color:"#ccc"}}>HACKEA · info@hackea.pro</div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
