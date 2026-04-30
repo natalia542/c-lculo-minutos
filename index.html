@@ -196,8 +196,10 @@ function App() {
               <tbody>
                 {filtered.map(a => {
                   const asyncT = a.h_async + a.h_apoyo;
-                  const pagU = a.uni>0 ? (a.pag_clase/a.uni).toFixed(0) : 0;
-                  const pagTema = a.temas>0 ? (a.pag_clase/a.temas).toFixed(1) : 0;
+                  const pagTotalU = a.uni>0 ? (a.pag_clase/a.uni)+12+2.5 : 0;
+                  const pagU = pagTotalU.toFixed(0);
+                  const temasU = a.uni>0 ? a.temas/a.uni : 0;
+                  const pagTema = temasU>0 ? (pagTotalU/temasU).toFixed(1) : 0;
                   const p = pct(a);
                   return (
                     <tr key={a.id} style={{borderBottom:"1px solid #F5F5F5"}}>
@@ -327,8 +329,8 @@ function App() {
                       <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{pVC}</td>
                       <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{pInf}</td>
                       <td style={{textAlign:"right",padding:"6px 8px",fontWeight:700}}>{pTot.toFixed(0)}</td>
-                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.uni>0?(a.pag_clase/a.uni).toFixed(0):"-"}</td>
-                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.temas>0?(a.pag_clase/a.temas).toFixed(1):"-"}</td>
+                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.uni>0?((a.pag_clase/a.uni)+12+2.5).toFixed(0):"-"}</td>
+                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{(()=>{const pu=a.uni>0?(a.pag_clase/a.uni)+14.5:0;const tu=a.uni>0?a.temas/a.uni:0;return tu>0?((pu/tu).toFixed(1)):"-";})()}</td>
                       <td style={{textAlign:"center",padding:"6px 4px"}}><Badge p={pct(a)}/></td>
                     </tr>
                   );
