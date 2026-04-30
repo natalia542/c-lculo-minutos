@@ -43,7 +43,7 @@ function pct(a) { const g=tgt(a); return g>0?totalMin(a)/g*100:0; }
 
 function mkUnits(n) {
   const u = [];
-  for(let i=0;i<n;i++) u.push({orient:2,videoClase:12,infografia:12,biblio:0,formativo:15,sumativo:60});
+  for(let i=0;i<n;i++) u.push({orient:2,videoClase:12,infografia:15,biblio:0,formativo:15,sumativo:60});
   return u;
 }
 
@@ -196,10 +196,8 @@ function App() {
               <tbody>
                 {filtered.map(a => {
                   const asyncT = a.h_async + a.h_apoyo;
-                  const pagTotalU = a.uni>0 ? (a.pag_clase/a.uni)+12+2.5 : 0;
-                  const pagU = pagTotalU.toFixed(0);
-                  const temasU = a.uni>0 ? a.temas/a.uni : 0;
-                  const pagTema = temasU>0 ? (pagTotalU/temasU).toFixed(1) : 0;
+                  const pagU = a.uni>0 ? (a.pag_clase/a.uni).toFixed(0) : 0;
+                  const pagTema = a.temas>0 ? (a.pag_clase/a.temas).toFixed(1) : 0;
                   const p = pct(a);
                   return (
                     <tr key={a.id} style={{borderBottom:"1px solid #F5F5F5"}}>
@@ -213,7 +211,7 @@ function App() {
                       <td style={{textAlign:"right",padding:"6px 8px",fontWeight:700,color:"#0090F8"}}>{asyncT}</td>
                       <td style={{padding:"4px 4px"}}><N v={a.uni} w={36} onChange={v=>upd(a.id,x=>{
                         const d=v-x.uni;
-                        if(d>0) for(let i=0;i<d;i++) x.units_data.push({orient:2,videoClase:12,infografia:12,biblio:0,formativo:15,sumativo:60});
+                        if(d>0) for(let i=0;i<d;i++) x.units_data.push({orient:2,videoClase:12,infografia:15,biblio:0,formativo:15,sumativo:60});
                         if(d<0) x.units_data=x.units_data.slice(0,v);
                         x.uni=v; return x;
                       })} /></td>
@@ -253,7 +251,7 @@ function App() {
             {isO && (
               <div style={{padding:"0 16px 16px",background:"#FAFBFF"}}>
                 <div style={{display:"flex",gap:14,marginBottom:10,fontSize:12,flexWrap:"wrap"}}>
-                  <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>Unidades: <N v={a.uni} w={36} onChange={v=>upd(a.id,x=>{const d=v-x.uni;if(d>0)for(let i=0;i<d;i++)x.units_data.push({orient:2,videoClase:12,infografia:12,biblio:0,formativo:15,sumativo:60});if(d<0)x.units_data=x.units_data.slice(0,v);x.uni=v;return x;})} /></label>
+                  <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>Unidades: <N v={a.uni} w={36} onChange={v=>upd(a.id,x=>{const d=v-x.uni;if(d>0)for(let i=0;i<d;i++)x.units_data.push({orient:2,videoClase:12,infografia:15,biblio:0,formativo:15,sumativo:60});if(d<0)x.units_data=x.units_data.slice(0,v);x.uni=v;return x;})} /></label>
                   <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>Temas: <N v={a.temas} w={36} onChange={v=>upd(a.id,x=>{x.temas=v;return x;})} /></label>
                   <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>H async: <N v={a.h_async} w={40} onChange={v=>upd(a.id,x=>{x.h_async=v;return x;})} /></label>
                   <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>H apoyo: <N v={a.h_apoyo} w={40} onChange={v=>upd(a.id,x=>{x.h_apoyo=v;return x;})} /></label>
@@ -329,8 +327,8 @@ function App() {
                       <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{pVC}</td>
                       <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{pInf}</td>
                       <td style={{textAlign:"right",padding:"6px 8px",fontWeight:700}}>{pTot.toFixed(0)}</td>
-                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.uni>0?((a.pag_clase/a.uni)+12+2.5).toFixed(0):"-"}</td>
-                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{(()=>{const pu=a.uni>0?(a.pag_clase/a.uni)+14.5:0;const tu=a.uni>0?a.temas/a.uni:0;return tu>0?((pu/tu).toFixed(1)):"-";})()}</td>
+                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.uni>0?(a.pag_clase/a.uni).toFixed(0):"-"}</td>
+                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.temas>0?(a.pag_clase/a.temas).toFixed(1):"-"}</td>
                       <td style={{textAlign:"center",padding:"6px 4px"}}><Badge p={pct(a)}/></td>
                     </tr>
                   );
