@@ -21,55 +21,55 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 <script type="text/babel">
 const {useState,useMemo,useCallback,useEffect,useRef} = React;
 
-/* ═══════════════════════════════════════════
-   SUPABASE — Cambia estas dos líneas
-   ═══════════════════════════════════════════ */
 const SUPABASE_URL = "https://uiqktoskdpnvpysibgqm.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVpcWt0b3NrZHBudnB5c2liZ3FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0ODc3MTQsImV4cCI6MjA5MzA2MzcxNH0.57fXlTos-fU9gAU6jtDI3UJhIb-Da9BoJvxD8PQ-9O4";
-/* ═══════════════════════════════════════════ */
 
 const sbEnabled = SUPABASE_URL !== "TU_URL_AQUI";
 const sb = sbEnabled ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
-/* ── Helpers ── */
 const HP = 40;
+const DEFUNIT = {orient:2,videoClase:12,infografia:15,biblio:60,formativo:15,sumativo:60};
+
 function totalMin(a) {
   let t = a.bienvenida + a.pag_clase*7.5 + a.conclusion + a.complementarios;
   (a.units_data||[]).forEach(u => { t += u.orient+u.videoClase+u.infografia+u.biblio+u.formativo+u.sumativo; });
   return t + a.examen;
 }
 function tgt(a) { return (a.h_async+a.h_apoyo)*HP; }
-function pct(a) { const g=tgt(a); return g>0?totalMin(a)/g*100:0; }
+function pc(a) { const g=tgt(a); return g>0?totalMin(a)/g*100:0; }
+
+function suggestedPag(a) {
+  let sinCC = a.bienvenida + a.conclusion + a.complementarios + a.examen;
+  (a.units_data||[]).forEach(u => { sinCC += u.orient+u.videoClase+u.infografia+u.biblio+u.formativo+u.sumativo; });
+  const needed = tgt(a) - sinCC;
+  return Math.max(0, Math.ceil(needed / 7.5));
+}
 
 function mkUnits(n) {
   const u = [];
-  for(let i=0;i<n;i++) u.push({orient:2,videoClase:12,infografia:15,biblio:0,formativo:15,sumativo:60});
+  for(let i=0;i<n;i++) u.push({...DEFUNIT});
   return u;
 }
 
 const FALLBACK = [
-  {id:1,prog:"MBA",ciclo:1,nombre:"Taller de emprendimiento",uni:4,temas:8,h_async:15,h_apoyo:12,doc:"Vanessa Nowak",bienvenida:3,pag_clase:86,conclusion:2,complementarios:0,examen:60,units_data:mkUnits(4)},
-  {id:2,prog:"MBA",ciclo:1,nombre:"Marketing y comportamiento del consumidor",uni:4,temas:8,h_async:15,h_apoyo:12,doc:"Luciana De Araujo",bienvenida:3,pag_clase:86,conclusion:2,complementarios:0,examen:60,units_data:mkUnits(4)},
+  {id:1,prog:"MBA",ciclo:1,nombre:"Taller de emprendimiento",uni:4,h_async:15,h_apoyo:12,doc:"Vanessa Nowak",bienvenida:3,pag_clase:86,conclusion:2,complementarios:0,examen:60,units_data:mkUnits(4)},
+  {id:2,prog:"MBA",ciclo:1,nombre:"Marketing y comportamiento del consumidor",uni:4,h_async:15,h_apoyo:12,doc:"Luciana De Araujo",bienvenida:3,pag_clase:86,conclusion:2,complementarios:0,examen:60,units_data:mkUnits(4)},
 ];
 
-/* ── Tiny components ── */
 const PCOL = {MBA:"#0090F8",MCG:"#404040",MCEE:"#0090F8",OPT:"#666"};
 
 const N = ({v,onChange,w=52,accent=false}) => (
   <input type="number" value={v} onChange={e=>onChange(Number(e.target.value)||0)}
     style={{width:w,border:"1px solid "+(accent?"#0090F8":"#ddd"),borderRadius:4,padding:"3px 4px",fontSize:12,textAlign:"right",background:accent?"#F0F8FF":"#fff",fontFamily:"inherit",fontWeight:accent?600:400}} />
 );
-
 const Tx = ({v,onChange,w=120}) => (
   <input type="text" value={v||""} onChange={e=>onChange(e.target.value)}
     style={{width:w,border:"1px solid #ddd",borderRadius:4,padding:"3px 6px",fontSize:12,fontFamily:"inherit"}} />
 );
-
 function Badge({p}) {
   const [bg,fg,lb] = p<95?["#FEE2E2","#991B1B","Bajo"]:p<=115?["#D1FAE5","#065F46","OK"]:["#FEF3C7","#92400E","Excede"];
   return <span style={{background:bg,color:fg,padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{lb} {p.toFixed(0)}%</span>;
 }
-
 function Bar({p}) {
   const c = p<95?"#EF4444":p<=115?"#0090F8":"#F59E0B";
   return (
@@ -79,12 +79,10 @@ function Bar({p}) {
     </div>
   );
 }
-
 function Pill({prog}) {
   return <span style={{fontSize:9,color:"#fff",background:PCOL[prog]||"#888",borderRadius:3,padding:"2px 6px",fontWeight:700,whiteSpace:"nowrap"}}>{prog}</span>;
 }
 
-/* ═══ MAIN APP ═══ */
 function App() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +93,6 @@ function App() {
   const [saving, setSaving] = useState(false);
   const saveTimer = useRef(null);
 
-  // Load from Supabase
   useEffect(() => {
     async function load() {
       if (!sb) { setData(FALLBACK); setLoading(false); return; }
@@ -107,7 +104,6 @@ function App() {
     load();
   }, []);
 
-  // Auto-save to Supabase (debounced 1.5s)
   const saveToDb = useCallback(async (record) => {
     if (!sb) return;
     setSaving(true);
@@ -141,8 +137,6 @@ function App() {
 
   if (loading) return <div style={{textAlign:"center",padding:80,color:"#999",fontSize:14}}>Cargando datos...</div>;
 
-  const tabNames = ["Asignaturas","Minutos de consumo","Páginas contenidista","Costos"];
-
   return (
     <div style={{maxWidth:1200,margin:"0 auto",padding:"20px 16px",minHeight:"100vh"}}>
       {/* Header */}
@@ -156,12 +150,12 @@ function App() {
             <span style={{fontSize:11,color:"#999",marginLeft:8}}>Calculadora de Recursos</span>
           </div>
         </div>
-        <div style={{fontSize:11,color:saving?"#0090F8":"#ccc"}}>{saving ? "Guardando..." : sbEnabled ? "Conectado a Supabase" : "Modo local (sin persistencia)"}</div>
+        <div style={{fontSize:11,color:saving?"#0090F8":"#ccc"}}>{saving?"Guardando...":sbEnabled?"Conectado a Supabase":"Modo local"}</div>
       </div>
 
       {/* Tabs */}
       <div style={{display:"flex",gap:0,borderBottom:"2px solid #EBECF0",marginBottom:16,overflowX:"auto"}}>
-        {tabNames.map((t,i) => (
+        {["Asignaturas","Minutos de consumo","Páginas contenidista","Costos"].map((t,i) => (
           <button key={i} onClick={()=>setTab(i)} style={{padding:"8px 18px",fontSize:12,fontWeight:tab===i?600:400,color:tab===i?"#0090F8":"#999",borderBottom:tab===i?"2px solid #0090F8":"2px solid transparent",background:"none",border:"none",cursor:"pointer",marginBottom:-2,fontFamily:"inherit",whiteSpace:"nowrap"}}>{t}</button>
         ))}
       </div>
@@ -184,41 +178,37 @@ function App() {
         <div style={{background:"#fff",borderRadius:10,border:"1px solid #EBECF0",overflow:"hidden"}}>
           <div style={{padding:"14px 16px",background:"#F8F9FA",borderBottom:"1px solid #EBECF0"}}>
             <div style={{fontSize:14,fontWeight:600,color:"#2A2A2A"}}>Asignaturas — Datos base</div>
-            <div style={{fontSize:11,color:"#888",marginTop:2}}>Edita horas, unidades y temas. Estos datos alimentan las demás vistas.</div>
+            <div style={{fontSize:11,color:"#888",marginTop:2}}>Edita horas y unidades. "Sugerido" = páginas CC para llegar al 100%. Haz clic en el número azul para aplicarlo.</div>
           </div>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead><tr style={{background:"#F8F9FA"}}>
-                {["","Asignatura","Docente","Async H","Apoyo","Total Async","Unid","Temas","Pág CC","Pág/U","Pág/Tema","Min total","Estado"].map((h,i)=>(
-                  <th key={i} style={{padding:"8px 8px",textAlign:i<3?"left":"right",fontWeight:600,color:"#666",fontSize:10,borderBottom:"1px solid #EBECF0",whiteSpace:"nowrap"}}>{h}</th>
+                {["","Asignatura","Docente","Async H","Apoyo","Total Async","Unid","Pág CC","Sugerido","Pág/U","Min total","Estado"].map((h,i)=>(
+                  <th key={i} style={{padding:"8px 8px",textAlign:i<3?"left":"right",fontWeight:600,color:h==="Sugerido"?"#0090F8":"#666",fontSize:10,borderBottom:"1px solid #EBECF0",whiteSpace:"nowrap"}}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {filtered.map(a => {
-                  const asyncT = a.h_async + a.h_apoyo;
+                  const sug = suggestedPag(a);
                   const pagU = a.uni>0 ? (a.pag_clase/a.uni).toFixed(0) : 0;
-                  const pagTema = a.temas>0 ? (a.pag_clase/a.temas).toFixed(1) : 0;
-                  const p = pct(a);
+                  const p = pc(a);
                   return (
                     <tr key={a.id} style={{borderBottom:"1px solid #F5F5F5"}}>
                       <td style={{padding:"6px 8px"}}><Pill prog={a.prog}/><br/><span style={{fontSize:9,color:"#bbb"}}>C{a.ciclo}</span></td>
-                      <td style={{padding:"6px 8px",minWidth:180}}>
-                        <div style={{fontWeight:500,color:"#2A2A2A"}}>{a.nombre}</div>
-                      </td>
+                      <td style={{padding:"6px 8px",minWidth:180}}><div style={{fontWeight:500,color:"#2A2A2A"}}>{a.nombre}</div></td>
                       <td style={{padding:"4px 6px"}}><Tx v={a.doc} w={110} onChange={v=>upd(a.id,x=>{x.doc=v;return x;})} /></td>
                       <td style={{padding:"4px 4px"}}><N v={a.h_async} w={42} onChange={v=>upd(a.id,x=>{x.h_async=v;return x;})} /></td>
                       <td style={{padding:"4px 4px"}}><N v={a.h_apoyo} w={42} onChange={v=>upd(a.id,x=>{x.h_apoyo=v;return x;})} /></td>
-                      <td style={{textAlign:"right",padding:"6px 8px",fontWeight:700,color:"#0090F8"}}>{asyncT}</td>
+                      <td style={{textAlign:"right",padding:"6px 8px",fontWeight:700,color:"#0090F8"}}>{a.h_async+a.h_apoyo}</td>
                       <td style={{padding:"4px 4px"}}><N v={a.uni} w={36} onChange={v=>upd(a.id,x=>{
                         const d=v-x.uni;
-                        if(d>0) for(let i=0;i<d;i++) x.units_data.push({orient:2,videoClase:12,infografia:15,biblio:0,formativo:15,sumativo:60});
+                        if(d>0) for(let i=0;i<d;i++) x.units_data.push({...DEFUNIT});
                         if(d<0) x.units_data=x.units_data.slice(0,v);
                         x.uni=v; return x;
                       })} /></td>
-                      <td style={{padding:"4px 4px"}}><N v={a.temas} w={36} onChange={v=>upd(a.id,x=>{x.temas=v;return x;})} /></td>
                       <td style={{padding:"4px 4px"}}><N v={a.pag_clase} w={48} accent onChange={v=>upd(a.id,x=>{x.pag_clase=v;return x;})} /></td>
+                      <td style={{textAlign:"right",padding:"6px 8px",fontWeight:600,color:"#0090F8",cursor:"pointer"}} title="Clic para aplicar" onClick={()=>upd(a.id,x=>{x.pag_clase=sug;return x;})}>{sug} <span style={{fontSize:9,opacity:.6}}>&#9654;</span></td>
                       <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{pagU}</td>
-                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{pagTema}</td>
                       <td style={{textAlign:"right",padding:"6px 8px",fontWeight:600}}>{totalMin(a).toFixed(0)}</td>
                       <td style={{textAlign:"center",padding:"6px 4px"}}><Badge p={p} /></td>
                     </tr>
@@ -232,7 +222,7 @@ function App() {
 
       {/* ═══ TAB 1: MINUTOS ═══ */}
       {tab===1 && filtered.map(a => {
-        const tm=totalMin(a), tg2=tgt(a), p=pct(a), isO=open===a.id;
+        const tm=totalMin(a), tg2=tgt(a), p=pc(a), isO=open===a.id;
         const ud = a.units_data||[];
         const minTr = a.bienvenida+a.pag_clase*7.5+a.conclusion+a.complementarios;
         const minU = ud.reduce((s,u)=>s+u.orient+u.videoClase+u.infografia+u.biblio+u.formativo+u.sumativo,0);
@@ -242,7 +232,7 @@ function App() {
               <Pill prog={a.prog} />
               <div>
                 <div style={{fontSize:13,fontWeight:500,color:"#2A2A2A"}}>{a.nombre}</div>
-                <div style={{fontSize:10,color:"#999"}}>C{a.ciclo} · {a.uni}u · {a.temas}t · {a.h_async+a.h_apoyo}h async · {a.doc}</div>
+                <div style={{fontSize:10,color:"#999"}}>C{a.ciclo} · {a.uni}u · {a.h_async+a.h_apoyo}h async · {a.doc}</div>
               </div>
               <div style={{textAlign:"right"}}><span style={{fontSize:14,fontWeight:700}}>{tm.toFixed(0)}</span><span style={{fontSize:10,color:"#999"}}> / {tg2}</span></div>
               <Bar p={p} />
@@ -250,11 +240,11 @@ function App() {
             </div>
             {isO && (
               <div style={{padding:"0 16px 16px",background:"#FAFBFF"}}>
-                <div style={{display:"flex",gap:14,marginBottom:10,fontSize:12,flexWrap:"wrap"}}>
-                  <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>Unidades: <N v={a.uni} w={36} onChange={v=>upd(a.id,x=>{const d=v-x.uni;if(d>0)for(let i=0;i<d;i++)x.units_data.push({orient:2,videoClase:12,infografia:15,biblio:0,formativo:15,sumativo:60});if(d<0)x.units_data=x.units_data.slice(0,v);x.uni=v;return x;})} /></label>
-                  <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>Temas: <N v={a.temas} w={36} onChange={v=>upd(a.id,x=>{x.temas=v;return x;})} /></label>
+                <div style={{display:"flex",gap:14,marginBottom:10,fontSize:12,flexWrap:"wrap",alignItems:"center"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>Unidades: <N v={a.uni} w={36} onChange={v=>upd(a.id,x=>{const d=v-x.uni;if(d>0)for(let i=0;i<d;i++)x.units_data.push({...DEFUNIT});if(d<0)x.units_data=x.units_data.slice(0,v);x.uni=v;return x;})} /></label>
                   <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>H async: <N v={a.h_async} w={40} onChange={v=>upd(a.id,x=>{x.h_async=v;return x;})} /></label>
                   <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>H apoyo: <N v={a.h_apoyo} w={40} onChange={v=>upd(a.id,x=>{x.h_apoyo=v;return x;})} /></label>
+                  <button onClick={()=>upd(a.id,x=>{x.pag_clase=suggestedPag(x);return x;})} style={{marginLeft:"auto",background:"#0090F8",color:"#fff",border:"none",borderRadius:5,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Sugerir CC ({suggestedPag(a)} pág)</button>
                 </div>
                 {/* Generales */}
                 <div style={{fontSize:11,fontWeight:600,color:"#0090F8",marginBottom:4,borderBottom:"1px solid #E0E7F0",paddingBottom:3}}>Recursos generales</div>
@@ -305,42 +295,42 @@ function App() {
         <div style={{background:"#fff",borderRadius:10,border:"1px solid #EBECF0",overflow:"hidden"}}>
           <div style={{padding:"14px 16px",background:"#F8F9FA",borderBottom:"1px solid #EBECF0"}}>
             <div style={{fontSize:14,fontWeight:600,color:"#2A2A2A"}}>Páginas de desarrollo — Contenidista</div>
-            <div style={{fontSize:11,color:"#888",marginTop:2}}>CC editable. VC = 12 pág × unidades. Inf = 2.5 pág × unidades.</div>
+            <div style={{fontSize:11,color:"#888",marginTop:2}}>CC editable. VC = 12 pág × unidades. Inf = 2.5 pág × unidades. Clic en "Sugerido" para aplicar.</div>
           </div>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead><tr style={{background:"#F8F9FA"}}>
-                {["","Asignatura","U","T","Pág CC","Pág VC","Pág Inf","Total","Pág/U","Pág/T","Estado"].map((h,i)=>(
-                  <th key={i} style={{padding:"8px 8px",textAlign:i<2?"left":"right",fontWeight:600,color:i===4?"#0090F8":"#666",fontSize:10,borderBottom:"1px solid #EBECF0"}}>{h}</th>
+                {["","Asignatura","U","Pág CC","Sugerido","Pág VC","Pág Inf","Total","Pág/U","Estado"].map((h,i)=>(
+                  <th key={i} style={{padding:"8px 8px",textAlign:i<2?"left":"right",fontWeight:600,color:(h==="Pág CC"||h==="Sugerido")?"#0090F8":"#666",fontSize:10,borderBottom:"1px solid #EBECF0"}}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
                 {filtered.map(a => {
-                  const pVC=12*a.uni, pInf=2.5*a.uni, pTot=a.pag_clase+pVC+pInf;
+                  const pVC=12*a.uni, pInf=2.5*a.uni, pTot=a.pag_clase+pVC+pInf, sug=suggestedPag(a);
                   return (
                     <tr key={a.id} style={{borderBottom:"1px solid #F5F5F5"}}>
                       <td style={{padding:"6px 8px"}}><Pill prog={a.prog}/></td>
                       <td style={{padding:"6px 8px",minWidth:140}}><div style={{fontWeight:500,fontSize:12}}>{a.nombre}</div><div style={{fontSize:10,color:"#aaa"}}>C{a.ciclo} · {a.doc}</div></td>
                       <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.uni}</td>
-                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.temas}</td>
                       <td style={{padding:"4px 4px"}}><N v={a.pag_clase} w={48} accent onChange={v=>upd(a.id,x=>{x.pag_clase=v;return x;})} /></td>
+                      <td style={{textAlign:"right",padding:"6px 8px",fontWeight:600,color:"#0090F8",cursor:"pointer"}} title="Clic para aplicar" onClick={()=>upd(a.id,x=>{x.pag_clase=sug;return x;})}>{sug} <span style={{fontSize:9,opacity:.6}}>&#9654;</span></td>
                       <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{pVC}</td>
                       <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{pInf}</td>
                       <td style={{textAlign:"right",padding:"6px 8px",fontWeight:700}}>{pTot.toFixed(0)}</td>
                       <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.uni>0?(a.pag_clase/a.uni).toFixed(0):"-"}</td>
-                      <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.temas>0?(a.pag_clase/a.temas).toFixed(1):"-"}</td>
-                      <td style={{textAlign:"center",padding:"6px 4px"}}><Badge p={pct(a)}/></td>
+                      <td style={{textAlign:"center",padding:"6px 4px"}}><Badge p={pc(a)}/></td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot><tr style={{background:"#F8F9FA",fontWeight:700,fontSize:12}}>
-                <td colSpan={4} style={{padding:"10px 8px"}}>Totales</td>
+                <td colSpan={3} style={{padding:"10px 8px"}}>Totales</td>
                 <td style={{textAlign:"right",padding:"10px 8px",color:"#0090F8"}}>{filtered.reduce((s,a)=>s+a.pag_clase,0)}</td>
+                <td></td>
                 <td style={{textAlign:"right",padding:"10px 8px"}}>{filtered.reduce((s,a)=>s+12*a.uni,0)}</td>
                 <td style={{textAlign:"right",padding:"10px 8px"}}>{filtered.reduce((s,a)=>s+2.5*a.uni,0)}</td>
                 <td style={{textAlign:"right",padding:"10px 8px"}}>{filtered.reduce((s,a)=>s+a.pag_clase+12*a.uni+2.5*a.uni,0).toFixed(0)}</td>
-                <td colSpan={3}></td>
+                <td colSpan={2}></td>
               </tr></tfoot>
             </table>
           </div>
