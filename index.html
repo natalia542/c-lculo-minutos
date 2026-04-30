@@ -9,6 +9,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#FAFAFA;font-family:'Poppins',sans-serif}
@@ -83,6 +84,41 @@ function Pill({prog}) {
   return <span style={{fontSize:9,color:"#fff",background:PCOL[prog]||"#888",borderRadius:3,padding:"2px 6px",fontWeight:700,whiteSpace:"nowrap"}}>{prog}</span>;
 }
 
+function exportPdf(a, tm, tg2, ud, minTr, minU) {
+  const pagPorU = a.uni > 0 ? (a.pag_clase / a.uni).toFixed(0) : 0;
+  let html = `<div style="font-family:Arial,sans-serif;padding:24px;max-width:700px;color:#2A2A2A">`;
+  html += `<div style="display:flex;align-items:center;gap:8;margin-bottom:16px"><div style="width:24px;height:24px;border-radius:50%;border:2px solid #0090F8;display:flex;align-items:center;justify-content:center"><div style="width:6px;height:6px;border-radius:50%;border:2px solid #0090F8"></div></div><span style="font-size:15px;font-weight:700">HACK<span style="color:#0090F8">EA</span></span></div>`;
+  html += `<h2 style="font-size:16px;color:#2A2A2A;margin:0 0 4px">${a.nombre}</h2>`;
+  html += `<p style="font-size:12px;color:#888;margin:0 0 16px">${a.prog} · Ciclo ${a.ciclo} · ${a.doc} · ${a.uni} unidades · ${a.h_async+a.h_apoyo} hrs asíncronas</p>`;
+  html += `<div style="background:#F0F8FF;border-left:3px solid #0090F8;padding:10px 14px;margin-bottom:16px;font-size:11px;color:#333;border-radius:4px">`;
+  html += `<b>Nota:</b> La clase escrita (${a.pag_clase} páginas totales) se distribuye equitativamente entre las ${a.uni} unidades de la asignatura, es decir, aproximadamente <b>${pagPorU} páginas por unidad</b>. Cada página equivale a 7.5 minutos de lectura del estudiante.</div>`;
+  html += `<table style="width:100%;border-collapse:collapse;font-size:12px">`;
+  html += `<tr style="background:#F8F9FA"><th style="text-align:left;padding:6px 10px;border-bottom:1px solid #ddd" colspan="2">Recursos generales</th><th style="text-align:right;padding:6px 10px;border-bottom:1px solid #ddd">Min</th></tr>`;
+  html += `<tr><td colspan="2" style="padding:4px 10px">Video de bienvenida</td><td style="text-align:right;padding:4px 10px">${a.bienvenida}</td></tr>`;
+  html += `<tr><td colspan="2" style="padding:4px 10px">Clase escrita (${a.pag_clase} pág ÷ ${a.uni} unidades = ${pagPorU} pág/u)</td><td style="text-align:right;padding:4px 10px;font-weight:600;color:#0090F8">${(a.pag_clase*7.5).toFixed(0)}</td></tr>`;
+  html += `<tr><td colspan="2" style="padding:4px 10px">Conclusión y cierre</td><td style="text-align:right;padding:4px 10px">${a.conclusion}</td></tr>`;
+  if (a.complementarios > 0) html += `<tr><td colspan="2" style="padding:4px 10px">Recursos complementarios</td><td style="text-align:right;padding:4px 10px">${a.complementarios}</td></tr>`;
+  html += `<tr style="font-weight:600"><td colspan="2" style="padding:6px 10px;border-top:1px solid #eee">Subtotal general</td><td style="text-align:right;padding:6px 10px;border-top:1px solid #eee">${minTr.toFixed(0)}</td></tr>`;
+  ud.forEach((u, i) => {
+    const uT = u.orient+u.videoClase+u.infografia+u.biblio+u.formativo+u.sumativo;
+    html += `<tr style="background:#F8F9FA"><th style="text-align:left;padding:6px 10px;border-top:1px solid #ddd" colspan="2">Unidad ${i+1}</th><th style="text-align:right;padding:6px 10px;border-top:1px solid #ddd">${uT}</th></tr>`;
+    html += `<tr><td colspan="2" style="padding:3px 10px">Orientaciones</td><td style="text-align:right;padding:3px 10px">${u.orient}</td></tr>`;
+    html += `<tr><td colspan="2" style="padding:3px 10px">Video clase</td><td style="text-align:right;padding:3px 10px">${u.videoClase}</td></tr>`;
+    html += `<tr><td colspan="2" style="padding:3px 10px">Infografía</td><td style="text-align:right;padding:3px 10px">${u.infografia}</td></tr>`;
+    html += `<tr><td colspan="2" style="padding:3px 10px">Bibliografía obligatoria</td><td style="text-align:right;padding:3px 10px">${u.biblio}</td></tr>`;
+    html += `<tr><td colspan="2" style="padding:3px 10px">Evaluación formativa</td><td style="text-align:right;padding:3px 10px">${u.formativo}</td></tr>`;
+    html += `<tr><td colspan="2" style="padding:3px 10px">Evaluación sumativa</td><td style="text-align:right;padding:3px 10px">${u.sumativo}</td></tr>`;
+  });
+  html += `<tr style="background:#F8F9FA"><th style="text-align:left;padding:6px 10px;border-top:1px solid #ddd" colspan="2">Examen final</th><th style="text-align:right;padding:6px 10px;border-top:1px solid #ddd">${a.examen}</th></tr>`;
+  html += `<tr style="font-weight:700;font-size:13px;background:#F0F8FF"><td colspan="2" style="padding:10px">TOTAL</td><td style="text-align:right;padding:10px;color:#0090F8">${tm.toFixed(0)} min / ${tg2} min objetivo (${(tm/tg2*100).toFixed(0)}%)</td></tr>`;
+  html += `</table>`;
+  html += `<p style="font-size:10px;color:#ccc;margin-top:20px;text-align:center">HACKEA · info@hackea.pro</p></div>`;
+  const el = document.createElement("div");
+  el.innerHTML = html;
+  document.body.appendChild(el);
+  window.html2pdf().set({margin:10,filename:a.nombre.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g,"")+"_recursos.pdf",image:{type:"jpeg",quality:.98},html2canvas:{scale:2},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"}}).from(el).save().then(()=>document.body.removeChild(el));
+}
+
 function App() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -155,7 +191,7 @@ function App() {
 
       {/* Tabs */}
       <div style={{display:"flex",gap:0,borderBottom:"2px solid #EBECF0",marginBottom:16,overflowX:"auto"}}>
-        {["Asignaturas","Minutos de consumo","Páginas contenidista","Costos"].map((t,i) => (
+        {["Asignaturas","Minutos de consumo","Páginas contenidista","Costos","Comparativa evaluaciones"].map((t,i) => (
           <button key={i} onClick={()=>setTab(i)} style={{padding:"8px 18px",fontSize:12,fontWeight:tab===i?600:400,color:tab===i?"#0090F8":"#999",borderBottom:tab===i?"2px solid #0090F8":"2px solid transparent",background:"none",border:"none",cursor:"pointer",marginBottom:-2,fontFamily:"inherit",whiteSpace:"nowrap"}}>{t}</button>
         ))}
       </div>
@@ -245,6 +281,11 @@ function App() {
                   <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>H async: <N v={a.h_async} w={40} onChange={v=>upd(a.id,x=>{x.h_async=v;return x;})} /></label>
                   <label style={{display:"flex",alignItems:"center",gap:4,color:"#666"}}>H apoyo: <N v={a.h_apoyo} w={40} onChange={v=>upd(a.id,x=>{x.h_apoyo=v;return x;})} /></label>
                   <button onClick={()=>upd(a.id,x=>{x.pag_clase=suggestedPag(x);return x;})} style={{marginLeft:"auto",background:"#0090F8",color:"#fff",border:"none",borderRadius:5,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Sugerir CC ({suggestedPag(a)} pág)</button>
+                  <button onClick={()=>exportPdf(a,tm,tg2,ud,minTr,minU)} style={{background:"#2A2A2A",color:"#fff",border:"none",borderRadius:5,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Exportar PDF</button>
+                </div>
+                {/* Nota distribución */}
+                <div style={{background:"#F0F8FF",borderLeft:"3px solid #0090F8",padding:"8px 12px",marginBottom:10,fontSize:11,color:"#333",borderRadius:4}}>
+                  <b>Clase escrita:</b> {a.pag_clase} páginas totales ÷ {a.uni} unidades = <b>{a.uni>0?(a.pag_clase/a.uni).toFixed(0):0} páginas por unidad</b> ({a.uni>0?((a.pag_clase/a.uni)*7.5).toFixed(0):0} min de lectura por unidad)
                 </div>
                 {/* Generales */}
                 <div style={{fontSize:11,fontWeight:600,color:"#0090F8",marginBottom:4,borderBottom:"1px solid #E0E7F0",paddingBottom:3}}>Recursos generales</div>
@@ -393,6 +434,75 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* ═══ TAB 4: COMPARATIVA EVALUACIONES ═══ */}
+      {tab===4 && (()=>{
+        const evalData = filtered.map(a => {
+          const ud = a.units_data||[];
+          const totalBiblio = ud.reduce((s,u)=>s+u.biblio,0);
+          const totalForm = ud.reduce((s,u)=>s+u.formativo,0);
+          const totalSum = ud.reduce((s,u)=>s+u.sumativo,0);
+          const totalEval = totalBiblio + totalForm + totalSum + a.examen;
+          const asyncTotal = (a.h_async+a.h_apoyo)*HP;
+          const pctEval = asyncTotal>0 ? (totalEval/asyncTotal*100) : 0;
+          return { ...a, totalBiblio, totalForm, totalSum, totalEval, asyncTotal, pctEval };
+        }).sort((a,b) => b.pctEval - a.pctEval);
+        const maxEval = Math.max(...evalData.map(e=>e.totalEval),1);
+        return (
+          <div style={{background:"#fff",borderRadius:10,border:"1px solid #EBECF0",overflow:"hidden"}}>
+            <div style={{padding:"14px 16px",background:"#F8F9FA",borderBottom:"1px solid #EBECF0"}}>
+              <div style={{fontSize:14,fontWeight:600,color:"#2A2A2A"}}>Comparativa de evaluaciones y bibliografía</div>
+              <div style={{fontSize:11,color:"#888",marginTop:2}}>Asignaturas con mayor proporción de minutos en evaluaciones requieren evaluaciones más extensas y elaboradas. Ordenado de mayor a menor proporción.</div>
+            </div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead><tr style={{background:"#F8F9FA"}}>
+                  {["","Asignatura","Hrs Async","Biblio","Formativo","Sumativo","Examen","Total Eval","% Eval","Distribución"].map((h,i)=>(
+                    <th key={i} style={{padding:"8px 8px",textAlign:i<2?"left":"right",fontWeight:600,color:h==="% Eval"?"#0090F8":"#666",fontSize:10,borderBottom:"1px solid #EBECF0",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {evalData.map(a => {
+                    const high = a.pctEval > 50;
+                    return (
+                      <tr key={a.id} style={{borderBottom:"1px solid #F5F5F5",background:high?"#FFFBEB":"#fff"}}>
+                        <td style={{padding:"6px 8px"}}><Pill prog={a.prog}/><br/><span style={{fontSize:9,color:"#bbb"}}>C{a.ciclo}</span></td>
+                        <td style={{padding:"6px 8px",minWidth:160}}>
+                          <div style={{fontWeight:500,color:"#2A2A2A"}}>{a.nombre}</div>
+                          <div style={{fontSize:10,color:"#aaa"}}>{a.uni}u · {a.doc}</div>
+                        </td>
+                        <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.h_async+a.h_apoyo}</td>
+                        <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.totalBiblio}</td>
+                        <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.totalForm}</td>
+                        <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.totalSum}</td>
+                        <td style={{textAlign:"right",padding:"6px 8px",color:"#666"}}>{a.examen}</td>
+                        <td style={{textAlign:"right",padding:"6px 8px",fontWeight:700}}>{a.totalEval}</td>
+                        <td style={{textAlign:"right",padding:"6px 8px",fontWeight:700,color:high?"#92400E":"#0090F8"}}>{a.pctEval.toFixed(0)}%</td>
+                        <td style={{padding:"6px 8px",minWidth:140}}>
+                          <div style={{display:"flex",height:14,borderRadius:3,overflow:"hidden",background:"#EBECF0",fontSize:0}}>
+                            <div style={{width:`${a.totalBiblio/a.asyncTotal*100}%`,background:"#93C5FD",height:"100%"}} title={`Biblio ${a.totalBiblio}min`} />
+                            <div style={{width:`${a.totalForm/a.asyncTotal*100}%`,background:"#6EE7B7",height:"100%"}} title={`Form ${a.totalForm}min`} />
+                            <div style={{width:`${a.totalSum/a.asyncTotal*100}%`,background:"#FCD34D",height:"100%"}} title={`Sum ${a.totalSum}min`} />
+                            <div style={{width:`${a.examen/a.asyncTotal*100}%`,background:"#F87171",height:"100%"}} title={`Examen ${a.examen}min`} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {/* Leyenda */}
+            <div style={{padding:"12px 16px",display:"flex",gap:16,fontSize:11,color:"#666",borderTop:"1px solid #EBECF0",flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:12,height:12,borderRadius:2,background:"#93C5FD",display:"inline-block"}} /> Bibliografía</span>
+              <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:12,height:12,borderRadius:2,background:"#6EE7B7",display:"inline-block"}} /> Formativo</span>
+              <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:12,height:12,borderRadius:2,background:"#FCD34D",display:"inline-block"}} /> Sumativo</span>
+              <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:12,height:12,borderRadius:2,background:"#F87171",display:"inline-block"}} /> Examen</span>
+              <span style={{marginLeft:"auto",color:"#92400E",fontWeight:600}}>Fondo amarillo = más del 50% del tiempo async es evaluación</span>
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{marginTop:24,textAlign:"center",fontSize:10,color:"#ccc"}}>HACKEA · info@hackea.pro</div>
     </div>
