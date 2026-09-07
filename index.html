@@ -57,15 +57,26 @@ function num(v, d) { var n = Number(v); return isNaN(n) ? d : n; }
 /* ---------- Plantilla estándar de unidad ----------
    La clase escrita NO es recurso de la unidad: es transversal.
    Su tiempo si tributa a cada unidad (se calcula como el resto). */
+/* Las descripciones se refrescan siempre desde aquí: no son editables
+   en pantalla, así que se corrigen solas en los datos ya guardados */
+var DESCS = {
+  "Orientaciones de la unidad": "Audio que abre la unidad",
+  "Videoclase": "Los temas centrales, explicados",
+  "Recurso interactivo": "Interactivo con los temas destacados",
+  "Foro": "Participación y discusión",
+  "Bibliografía obligatoria": "Lecturas provistas por la Universidad",
+  "Evaluación formativa": "Práctica con retroalimentación",
+  "Evaluación sumativa": "Evaluación calificada de la unidad"
+};
 var MIN_FORM = [60, 90], MIN_SUM = [60, 90], MIN_EX = [90, 120];
 var TPL = [
-  { nombre: "Orientaciones de la unidad", desc: "Audio del docente que abre la unidad", min: 5,  presup: "async" },
-  { nombre: "Videoclase",                 desc: "Los temas centrales, explicados",       min: 15, presup: "async" },
-  { nombre: "Recurso interactivo",        desc: "Interactivo con los temas destacados",  min: 15, presup: "async" },
-  { nombre: "Foro",                       desc: "Participación y discusión",             min: 30, presup: "async" },
-  { nombre: "Bibliografía obligatoria",   desc: "Lecturas provistas por la Universidad", min: 60, presup: "info" },
-  { nombre: "Evaluación formativa",       desc: "Práctica con retroalimentación",        min: MIN_FORM[0], presup: "sinc", rango: MIN_FORM },
-  { nombre: "Evaluación sumativa",        desc: "Evaluación calificada de la unidad",    min: MIN_SUM[0],  presup: "sinc", rango: MIN_SUM }
+  { nombre: "Orientaciones de la unidad", desc: DESCS["Orientaciones de la unidad"], min: 5,  presup: "async" },
+  { nombre: "Videoclase",                 desc: DESCS["Videoclase"],                     min: 15, presup: "async" },
+  { nombre: "Recurso interactivo",        desc: DESCS["Recurso interactivo"],            min: 15, presup: "async" },
+  { nombre: "Foro",                       desc: DESCS["Foro"],                           min: 30, presup: "async" },
+  { nombre: "Bibliografía obligatoria",   desc: DESCS["Bibliografía obligatoria"],       min: 60, presup: "info" },
+  { nombre: "Evaluación formativa",       desc: DESCS["Evaluación formativa"],           min: MIN_FORM[0], presup: "sinc", rango: MIN_FORM },
+  { nombre: "Evaluación sumativa",        desc: DESCS["Evaluación sumativa"],            min: MIN_SUM[0],  presup: "sinc", rango: MIN_SUM }
 ];
 function mkUnit() {
   return {
@@ -91,7 +102,7 @@ function migrateUnit(u) {
         var rg = r.rango || rangoDe(r.nombre);
         var m = num(r.min, 0);
         if (rg) m = Math.max(m, rg[0]);   // se aplica el minimo acordado
-        return { nombre: r.nombre, desc: r.desc || "", min: m, presup: r.presup || "async", rango: rg ? rg.slice() : null };
+        return { nombre: r.nombre, desc: DESCS[r.nombre] || r.desc || "", min: m, presup: r.presup || "async", rango: rg ? rg.slice() : null };
       })
     };
   }
@@ -99,13 +110,13 @@ function migrateUnit(u) {
   return {
     pag_manual: null,
     recursos: [
-      { nombre: "Orientaciones de la unidad", desc: TPL[0].desc, min: num(o.orient, 5),      presup: "async", rango: null },
-      { nombre: "Videoclase",                 desc: TPL[1].desc, min: num(o.videoClase, 15), presup: "async", rango: null },
-      { nombre: "Recurso interactivo",        desc: TPL[2].desc, min: num(o.infografia, 15), presup: "async", rango: null },
-      { nombre: "Foro",                       desc: TPL[3].desc, min: 30,                    presup: "async", rango: null },
-      { nombre: "Bibliografía obligatoria",   desc: TPL[4].desc, min: num(o.biblio, 60),     presup: "info",  rango: null },
-      { nombre: "Evaluación formativa",       desc: TPL[5].desc, min: Math.max(num(o.formativo, 0), MIN_FORM[0]), presup: "sinc", rango: MIN_FORM.slice() },
-      { nombre: "Evaluación sumativa",        desc: TPL[6].desc, min: Math.max(num(o.sumativo, 0), MIN_SUM[0]),   presup: "sinc", rango: MIN_SUM.slice() }
+      { nombre: "Orientaciones de la unidad", desc: DESCS["Orientaciones de la unidad"], min: num(o.orient, 5),      presup: "async", rango: null },
+      { nombre: "Videoclase",                 desc: DESCS["Videoclase"], min: num(o.videoClase, 15), presup: "async", rango: null },
+      { nombre: "Recurso interactivo",        desc: DESCS["Recurso interactivo"], min: num(o.infografia, 15), presup: "async", rango: null },
+      { nombre: "Foro",                       desc: DESCS["Foro"], min: 30,                    presup: "async", rango: null },
+      { nombre: "Bibliografía obligatoria",   desc: DESCS["Bibliografía obligatoria"], min: num(o.biblio, 60),     presup: "info",  rango: null },
+      { nombre: "Evaluación formativa",       desc: DESCS["Evaluación formativa"], min: Math.max(num(o.formativo, 0), MIN_FORM[0]), presup: "sinc", rango: MIN_FORM.slice() },
+      { nombre: "Evaluación sumativa",        desc: DESCS["Evaluación sumativa"], min: Math.max(num(o.sumativo, 0), MIN_SUM[0]),   presup: "sinc", rango: MIN_SUM.slice() }
     ]
   };
 }
@@ -118,7 +129,7 @@ function migrateEvals(e) {
     var rg = r.rango || rangoDe(r.nombre);
     var m = num(r.min, 0);
     if (rg) m = Math.max(m, rg[0]);
-    return { nombre: r.nombre || "Evaluación", desc: r.desc || "", min: m, rango: rg ? rg.slice() : null };
+    return { nombre: r.nombre || "Evaluación", desc: DESCS[r.nombre] || r.desc || "", min: m, rango: rg ? rg.slice() : null };
   });
 }
 function migrateAsig(a) {
@@ -482,6 +493,125 @@ function App() {
         h("b", { style: { color: C.texto } }, u.pag + " páginas"), "."));
   }
 
+  /* Las evaluaciones se definen con el docente en la reunión inicial,
+     por eso este bloque vive en la vista Universidad y no en la interna */
+  function bloqueEvaluaciones(a, r) {
+    var modo = (r.sincUnid > 0 && r.sincAsig > 0) ? "mixto" : (r.sincAsig > 0 ? "asignatura" : "unidad");
+
+    function aUnidad() {
+      upd(a.id, function (x) {
+        var guardadas = {};
+        (x.evals_asig || []).forEach(function (e) { guardadas[e.nombre] = e; });
+        x.evals_asig = [];
+        x.units_data.forEach(function (u) {
+          var tiene = {};
+          u.recursos.forEach(function (rc) { if (rc.presup === "sinc") tiene[rc.nombre] = true; });
+          ["Evaluación formativa", "Evaluación sumativa"].forEach(function (nom) {
+            if (tiene[nom]) return;
+            var prev = guardadas[nom];
+            var rg = nom.indexOf("formativa") > 0 ? MIN_FORM : MIN_SUM;
+            u.recursos.push({ nombre: nom, desc: DESCS[nom], min: prev ? prev.min : rg[0], presup: "sinc", rango: rg.slice() });
+          });
+        });
+        return x;
+      });
+    }
+    function aAsignatura() {
+      upd(a.id, function (x) {
+        var vistas = {};
+        x.units_data.forEach(function (u) {
+          u.recursos = u.recursos.filter(function (rc) {
+            if (rc.presup !== "sinc") return true;
+            if (!vistas[rc.nombre]) vistas[rc.nombre] = rc;
+            return false;
+          });
+        });
+        Object.keys(vistas).forEach(function (k) {
+          var ya = false;
+          (x.evals_asig || []).forEach(function (e) { if (e.nombre === k) ya = true; });
+          if (ya) return;
+          var rc = vistas[k];
+          x.evals_asig.push({ nombre: rc.nombre, desc: DESCS[rc.nombre] || "", min: rc.min, rango: rc.rango ? rc.rango.slice() : null });
+        });
+        if (!x.evals_asig.length) {
+          x.evals_asig = [
+            { nombre: "Evaluación formativa", desc: DESCS["Evaluación formativa"], min: MIN_FORM[0], rango: MIN_FORM.slice() },
+            { nombre: "Evaluación sumativa", desc: DESCS["Evaluación sumativa"], min: MIN_SUM[0], rango: MIN_SUM.slice() }
+          ];
+        }
+        return x;
+      });
+    }
+
+    function opcion(id, etiqueta, sub, activo, onClick) {
+      return h("button", {
+        key: id, onClick: onClick,
+        style: {
+          flex: "1 1 200px", textAlign: "left", padding: "10px 12px", cursor: "pointer", fontFamily: "inherit",
+          border: "1px solid " + (activo ? C.azul : "#DDE3EC"), borderRadius: 6,
+          background: activo ? "#F0F8FF" : "#fff"
+        }
+      },
+        h("div", { style: { fontSize: 12, fontWeight: 600, color: activo ? C.azul : C.texto } }, etiqueta),
+        h("div", { style: { fontSize: 11, color: "#8A8F98", marginTop: 2 } }, sub));
+    }
+
+    /* minutos editables, aplicados a todas las unidades a la vez */
+    function filaEvalUnidad(rec, ri) {
+      var bajo = rec.rango && rec.min < rec.rango[0];
+      return h("div", { key: "u" + ri, style: { display: "grid", gridTemplateColumns: "1fr 130px 60px 90px", gap: 8, alignItems: "center", fontSize: 13, padding: "7px 0", borderBottom: "1px solid #EFEFEF" } },
+        h("span", { style: { color: C.cuerpo } }, rec.nombre),
+        h("span", { style: { fontSize: 11, color: "#8A8F98" } }, "en cada unidad"),
+        h(N, { v: rec.min, w: 54, alerta: bajo, onChange: function (v) {
+          var m = num(v, 0);
+          upd(a.id, function (x) {
+            x.units_data.forEach(function (u) {
+              u.recursos.forEach(function (rc) { if (rc.nombre === rec.nombre && rc.presup === "sinc") rc.min = m; });
+            });
+            return x;
+          });
+        } }),
+        h("span", { style: { fontSize: 11, color: bajo ? C.ambar : "#8A8F98", textAlign: "right" } },
+          bajo ? ("mínimo " + rec.rango[0] + " min") : (rec.rango ? rec.rango[0] + " a " + rec.rango[1] + " min" : "min")));
+    }
+    function filaEvalAsig(e, ei) {
+      var bajo = e.rango && e.min < e.rango[0];
+      return h("div", { key: "a" + ei, style: { display: "grid", gridTemplateColumns: "1fr 130px 60px 90px", gap: 8, alignItems: "center", fontSize: 13, padding: "7px 0", borderBottom: "1px solid #EFEFEF" } },
+        h(Tx, { v: e.nombre, w: "100%", onChange: function (v) { upd(a.id, function (x) { x.evals_asig[ei].nombre = v; return x; }); } }),
+        h("span", { style: { fontSize: 11, color: "#8A8F98" } }, "una vez en el curso"),
+        h(N, { v: e.min, w: 54, alerta: bajo, onChange: function (v) { upd(a.id, function (x) { x.evals_asig[ei].min = num(v, 0); return x; }); } }),
+        h("span", { style: { fontSize: 11, textAlign: "right" } },
+          h("span", { style: { color: bajo ? C.ambar : "#8A8F98" } }, bajo ? ("mínimo " + e.rango[0] + " min") : (e.rango ? e.rango[0] + " a " + e.rango[1] + " min" : "min")),
+          h("button", { onClick: function () { upd(a.id, function (x) { x.evals_asig.splice(ei, 1); return x; }); }, title: "Quitar",
+            style: { background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 14, fontFamily: "inherit", marginLeft: 6 } }, "\u00D7")));
+    }
+
+    var evalsUnidad = (a.units_data[0].recursos || []).filter(function (rc) { return rc.presup === "sinc"; });
+
+    return h("div", { style: { marginBottom: 16 } },
+      h("div", { style: { fontSize: 12, fontWeight: 600, color: C.azul, marginBottom: 2 } }, "Evaluaciones"),
+      h("div", { style: { fontSize: 11, color: "#8A8F98", marginBottom: 8 } },
+        "Se define en la reunión inicial con el docente. No todas las asignaturas evalúan en cada unidad."),
+      h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 } },
+        opcion("u", "Una evaluación en cada unidad", "Se repite en las " + r.n + " unidades", modo === "unidad", aUnidad),
+        opcion("a", "Evaluaciones para toda la asignatura", "Una sola vez en el curso", modo === "asignatura", aAsignatura)),
+      modo === "mixto" ? h("div", { style: { fontSize: 11, color: C.ambar, background: C.ambarBg, border: "1px solid #F3D6A6", borderRadius: 6, padding: "6px 10px", marginBottom: 8 } },
+        "Esta asignatura tiene evaluaciones en las dos modalidades. Es válido, pero conviene confirmarlo con el docente.") : null,
+      evalsUnidad.map(filaEvalUnidad),
+      (a.evals_asig || []).map(filaEvalAsig),
+      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 130px 60px 90px", gap: 8, alignItems: "center", fontSize: 13, padding: "7px 0", borderBottom: "1px solid #EFEFEF" } },
+        h("span", { style: { color: C.cuerpo } }, "Examen final"),
+        h("span", { style: { fontSize: 11, color: "#8A8F98" } }, "cierre de la asignatura"),
+        h(N, { v: a.examen, w: 54, alerta: a.examen < MIN_EX[0], onChange: function (v) { upd(a.id, function (x) { x.examen = num(v, 0); return x; }); } }),
+        h("span", { style: { fontSize: 11, color: a.examen < MIN_EX[0] ? C.ambar : "#8A8F98", textAlign: "right" } },
+          a.examen < MIN_EX[0] ? ("mínimo " + MIN_EX[0] + " min") : (MIN_EX[0] + " a " + MIN_EX[1] + " min"))),
+      h("div", { style: { display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" } },
+        h("button", { onClick: function () { upd(a.id, function (x) { x.evals_asig.push({ nombre: "Evaluación formativa", desc: DESCS["Evaluación formativa"], min: MIN_FORM[0], rango: MIN_FORM.slice() }); return x; }); },
+          style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "4px 10px", fontSize: 11, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit" } }, "+ Formativa de asignatura"),
+        h("button", { onClick: function () { upd(a.id, function (x) { x.evals_asig.push({ nombre: "Evaluación sumativa", desc: DESCS["Evaluación sumativa"], min: MIN_SUM[0], rango: MIN_SUM.slice() }); return x; }); },
+          style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "4px 10px", fontSize: 11, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit" } }, "+ Sumativa de asignatura")));
+  }
+
   function vistaUniversidad() {
     return filtered.map(function (a) {
       var r = calc(a, cfg);
@@ -506,22 +636,18 @@ function App() {
           unidadesIguales(a, r)
             ? detalleUnidad(a, r, 0, "Cómo se compone cada unidad  \u00B7  " + r.n + " unidades iguales")
             : r.unidades.map(function (u, i) { return detalleUnidad(a, r, i, "Unidad " + (i + 1)); }),
-          (a.units_data[0].recursos || []).filter(function (rec) { return rec.presup !== "async"; }).length
+          (a.units_data[0].recursos || []).filter(function (rec) { return rec.presup === "info"; }).length
             ? tablaSimple("Además, en cada unidad",
-                (a.units_data[0].recursos || []).filter(function (rec) { return rec.presup !== "async"; }).map(function (rec) {
-                  return { nombre: rec.nombre, desc: rec.desc || "", tiempo: hm(rec.min), gris: rec.presup === "info" };
+                (a.units_data[0].recursos || []).filter(function (rec) { return rec.presup === "info"; }).map(function (rec) {
+                  return { nombre: rec.nombre, desc: rec.desc || "", tiempo: hm(rec.min), gris: true };
                 }), null)
             : null,
-          tablaSimple("Recursos de la asignatura completa",
-            [
-              { nombre: "Video de bienvenida", desc: "Presentación de la asignatura", tiempo: hm(a.bienvenida) },
-              { nombre: "Clase escrita", desc: r.pagTot + " páginas en total, repartidas entre las unidades", tiempo: hm(r.minCC) },
-              { nombre: "Podcast de conclusión", desc: "Cierre de la asignatura", tiempo: hm(a.conclusion) }
-            ].concat((a.evals_asig || []).map(function (e) {
-              return { nombre: e.nombre, desc: e.desc || "Evaluación de la asignatura completa", tiempo: hm(e.min) };
-            })).concat([
-              { nombre: "Examen final", desc: "Evaluación final de la asignatura", tiempo: hm(a.examen) }
-            ]), null)) : null);
+          bloqueEvaluaciones(a, r),
+          tablaSimple("Recursos de la asignatura completa", [
+            { nombre: "Video de bienvenida", desc: "Presentación de la asignatura", tiempo: hm(a.bienvenida) },
+            { nombre: "Clase escrita", desc: r.pagTot + " páginas en total, repartidas entre las unidades", tiempo: hm(r.minCC) },
+            { nombre: "Podcast de conclusión", desc: "Cierre de la asignatura", tiempo: hm(a.conclusion) }
+          ], null)) : null);
     });
   }
 
@@ -579,6 +705,15 @@ function App() {
     var gris = rec.presup === "info";
     var etiqueta = { async: "Asíncrono", sinc: "Síncrono", info: "No computa" };
     var bajo = rec.rango && rec.min < rec.rango[0];
+    /* las evaluaciones no se editan aquí: se definen con el docente */
+    if (rec.presup === "sinc") {
+      return h("div", { key: ri, style: { display: "grid", gridTemplateColumns: "1fr 90px 56px 78px 22px", gap: "2px 8px", alignItems: "center", fontSize: 12, padding: "3px 0", color: "#8A8F98" } },
+        h("span", null, rec.nombre),
+        h("span", { style: { fontSize: 10 } }, "Síncrono"),
+        h("span", { style: { textAlign: "right", fontWeight: 600 } }, rec.min),
+        h("span", { style: { textAlign: "right", fontSize: 10 } }, "min"),
+        h("span"));
+    }
     return h("div", { key: ri, style: { display: "grid", gridTemplateColumns: "1fr 90px 56px 78px 22px", gap: "2px 8px", alignItems: "center", fontSize: 12, padding: "2px 0", opacity: gris ? .65 : 1 } },
       h(Tx, { v: rec.nombre, w: "100%", onChange: function (v) { upd(a.id, function (x) { x.units_data[ui].recursos[ri].nombre = v; return x; }); } }),
       h("select", {
@@ -681,50 +816,15 @@ function App() {
                   style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "3px 10px", fontSize: 10, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit" } }, "Restaurar plantilla estándar")));
           }),
 
-          h("div", { style: { fontSize: 11, fontWeight: 600, color: C.texto, borderBottom: "1px solid #eee", paddingBottom: 3, marginBottom: 4, marginTop: 8, display: "flex", justifyContent: "space-between" } },
-            h("span", null, "Evaluaciones de la asignatura completa \u00B7 síncrono"),
-            h("span", { style: { fontWeight: 400, color: "#aaa" } }, "no se multiplican por unidad")),
-          (a.evals_asig || []).map(function (e, ei) {
-            var bajoE = e.rango && e.min < e.rango[0];
-            return h("div", { key: "e" + ei, style: { display: "grid", gridTemplateColumns: "1fr 56px 78px 22px", gap: "2px 8px", fontSize: 12, alignItems: "center", padding: "2px 0" } },
-              h(Tx, { v: e.nombre, w: "100%", onChange: function (v) { upd(a.id, function (x) { x.evals_asig[ei].nombre = v; return x; }); } }),
-              h(N, { v: e.min, w: 48, alerta: bajoE, onChange: function (v) { upd(a.id, function (x) { x.evals_asig[ei].min = num(v, 0); return x; }); } }),
-              h("span", { style: { textAlign: "right", color: bajoE ? C.ambar : "#888", fontSize: 10 } },
-                bajoE ? ("mín. " + e.rango[0]) : (e.rango ? e.rango[0] + "\u2013" + e.rango[1] + " min" : e.min + " min")),
-              h("button", { onClick: function () { upd(a.id, function (x) { x.evals_asig.splice(ei, 1); return x; }); }, title: "Quitar",
-                style: { background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 13, fontFamily: "inherit" } }, "\u00D7"));
-          }),
-          h("div", { style: { display: "grid", gridTemplateColumns: "1fr 56px 78px 22px", gap: "2px 8px", fontSize: 12, alignItems: "center", padding: "2px 0", borderTop: "1px dashed #E0E7F0", marginTop: 3 } },
-            h("span", { style: { color: C.texto, fontWeight: 600 } }, "Examen final"),
-            h(N, { v: a.examen, w: 48, alerta: a.examen < MIN_EX[0], onChange: function (v) { upd(a.id, function (x) { x.examen = num(v, 0); return x; }); } }),
-            h("span", { style: { textAlign: "right", color: a.examen < MIN_EX[0] ? C.ambar : "#888", fontSize: 10 } },
-              a.examen < MIN_EX[0] ? ("mín. " + MIN_EX[0]) : (MIN_EX[0] + "\u2013" + MIN_EX[1] + " min")),
-            h("span")),
-          h("div", { style: { display: "flex", gap: 8, margin: "6px 0 12px", flexWrap: "wrap" } },
-            h("button", { onClick: function () { upd(a.id, function (x) { x.evals_asig.push({ nombre: "Evaluación formativa", desc: "", min: MIN_FORM[0], rango: MIN_FORM.slice() }); return x; }); },
-              style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "3px 10px", fontSize: 10, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit" } }, "+ Formativa de asignatura"),
-            h("button", { onClick: function () { upd(a.id, function (x) { x.evals_asig.push({ nombre: "Evaluación sumativa", desc: "", min: MIN_SUM[0], rango: MIN_SUM.slice() }); return x; }); },
-              style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "3px 10px", fontSize: 10, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit" } }, "+ Sumativa de asignatura"),
-            h("button", {
-              onClick: function () {
-                upd(a.id, function (x) {
-                  var vistos = {};
-                  x.units_data.forEach(function (u) {
-                    u.recursos = u.recursos.filter(function (rc) {
-                      if (rc.presup !== "sinc") return true;
-                      if (!vistos[rc.nombre]) { vistos[rc.nombre] = rc; }
-                      return false;
-                    });
-                  });
-                  Object.keys(vistos).forEach(function (k) {
-                    var rc = vistos[k];
-                    x.evals_asig.push({ nombre: rc.nombre, desc: rc.desc || "", min: rc.min, rango: rc.rango ? rc.rango.slice() : null });
-                  });
-                  return x;
-                });
-              },
-              style: { background: "#fff", border: "1px solid " + C.azul, borderRadius: 5, padding: "3px 10px", fontSize: 10, color: C.azul, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }
-            }, "Mover evaluaciones a la asignatura")),
+          h("div", { style: { fontSize: 11, fontWeight: 600, color: C.texto, borderBottom: "1px solid #eee", paddingBottom: 3, marginBottom: 4, marginTop: 8 } }, "Evaluaciones \u00B7 síncrono"),
+          h("div", { style: { background: "#F8F9FA", borderRadius: 6, padding: "8px 12px", fontSize: 11, color: "#666", marginBottom: 12 } },
+            h("div", { style: { display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 } },
+              h("span", null, "Por unidad: ", h("b", { style: { color: C.texto } }, Math.round(r.sincUnid) + " min"),
+                "  \u00B7  Por asignatura: ", h("b", { style: { color: C.texto } }, Math.round(r.sincAsig) + " min"),
+                "  \u00B7  Examen: ", h("b", { style: { color: C.texto } }, a.examen + " min")),
+              h("b", { style: { color: C.texto } }, "Total " + Math.round(r.consumoSinc) + " min")),
+            h("div", { style: { color: "#aaa", marginTop: 4 } },
+              "Las evaluaciones se definen con el docente en la reunión inicial. Se editan en la Vista Universidad.")),
 
           h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 } },
             medidor("Asíncrono \u00B7 base de producción", "hora de " + cfg.minProd + " min", r.consumoAsync, r.presupProd, r.pctProd, false),
