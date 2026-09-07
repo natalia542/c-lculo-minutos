@@ -109,6 +109,18 @@ function migrateUnit(u) {
     ]
   };
 }
+/* Evaluaciones a nivel de asignatura: una sola para todo el curso,
+   no se multiplican por el número de unidades */
+function migrateEvals(e) {
+  if (typeof e === "string") { try { e = JSON.parse(e); } catch (x) { e = []; } }
+  if (!Array.isArray(e)) return [];
+  return e.map(function (r) {
+    var rg = r.rango || rangoDe(r.nombre);
+    var m = num(r.min, 0);
+    if (rg) m = Math.max(m, rg[0]);
+    return { nombre: r.nombre || "Evaluación", desc: r.desc || "", min: m, rango: rg ? rg.slice() : null };
+  });
+}
 function migrateAsig(a) {
   var uds = a.units_data;
   if (typeof uds === "string") { try { uds = JSON.parse(uds); } catch (e) { uds = []; } }
@@ -122,6 +134,7 @@ function migrateAsig(a) {
     conclusion: num(a.conclusion, 2),
     complementarios: num(a.complementarios, 0),
     examen: Math.max(num(a.examen, 0), MIN_EX[0]),
+    evals_asig: migrateEvals(a.evals_asig),
     h_async: num(a.h_async, 0),
     h_apoyo: num(a.h_apoyo, 0),
     pct_nuevo: num(a.pct_nuevo, 100),
@@ -167,7 +180,9 @@ function calc(a, cfg) {
   });
 
   var consumoAsync = transv + fijoUnid + minCC;
-  var consumoSinc = sincUnid + num(a.examen, 0);
+  var sincAsig = 0;
+  (a.evals_asig || []).forEach(function (r) { sincAsig += num(r.min, 0); });
+  var consumoSinc = sincUnid + sincAsig + num(a.examen, 0);
   var pct = num(a.pct_nuevo, 100) / 100;
   var excesoMin = consumoAsync - presupPed;
   var excesoPag = excesoMin / cfg.minPag;
@@ -178,6 +193,7 @@ function calc(a, cfg) {
     pagTot: pagTot, pagProducir: Math.round(pagTot * pct),
     pantTot: pagTot * cfg.pantPorPag,
     consumoAsync: consumoAsync, consumoSinc: consumoSinc, infoTot: infoTot,
+    sincUnid: sincUnid, sincAsig: sincAsig,
     presupProd: presupProd, presupPed: presupPed, presupSinc: presupSinc,
     pctProd: presupProd ? consumoAsync / presupProd * 100 : 0,
     pctPed:  presupPed  ? consumoAsync / presupPed  * 100 : 0,
@@ -194,7 +210,7 @@ function calc(a, cfg) {
 
 var FALLBACK = [
   { id: 1, prog: "MBA", ciclo: 1, nombre: "Taller de emprendimiento", uni: 4, h_async: 15, h_apoyo: 12,
-    doc: "Vanessa Nowak", bienvenida: 3, conclusion: 2, complementarios: 0, examen: 90, pct_nuevo: 100, nota: "", units_data: [] }
+    doc: "Vanessa Nowak", bienvenida: 3, conclusion: 2, complementarios: 0, examen: 90, pct_nuevo: 100, nota: "", evals_asig: [], units_data: [] }
 ];
 
 var PCOL = { MBA: "#0090F8", MCG: "#404040", MPCG: "#404040", MCEE: "#0090F8", OPT: "#666" };
@@ -298,6 +314,7 @@ function App() {
       uni: rec.uni, h_async: rec.h_async, h_apoyo: rec.h_apoyo,
       bienvenida: rec.bienvenida, conclusion: rec.conclusion,
       complementarios: rec.complementarios, examen: rec.examen,
+      evals_asig: rec.evals_asig,
       pct_nuevo: rec.pct_nuevo, nota: rec.nota,
       pag_clase: r.pagTot, units_data: rec.units_data,
       updated_at: new Date().toISOString()
@@ -316,7 +333,8 @@ function App() {
         var copy = Object.assign({}, a, {
           units_data: (a.units_data || []).map(function (u) {
             return { pag_manual: u.pag_manual, recursos: u.recursos.map(function (r) { return Object.assign({}, r); }) };
-          })
+          }),
+          evals_asig: (a.evals_asig || []).map(function (r) { return Object.assign({}, r); })
         });
         return fn(copy);
       });
@@ -432,9 +450,9 @@ function App() {
       h("div", { style: { fontSize: 13, fontWeight: 700, color: color, marginBottom: 6 } }, "Ajuste a las horas del programa"),
       lineaAjuste("Trabajo autónomo del estudiante", hped(r.presupPed, cfg), hped(r.consumoAsync, cfg), r.excesoMin),
       r.presupSinc > 0
-        ? lineaAjuste("Evaluaciónes y acompañamiento", hped(r.presupSinc, cfg), hped(r.consumoSinc, cfg), r.excesoSincMin)
+        ? lineaAjuste("Evaluaciones y acompañamiento", hped(r.presupSinc, cfg), hped(r.consumoSinc, cfg), r.excesoSincMin)
         : h("div", { style: { fontSize: 13, padding: "6px 0", color: C.ambar } },
-            "Evaluaciónes y acompañamiento: el programa no contempla horas de acompañamiento, y las evaluaciónes planificadas suman " + hped(r.consumoSinc, cfg) + "."),
+            "Evaluaciones y acompañamiento: el programa no contempla horas de acompañamiento, y las evaluaciones planificadas suman " + hped(r.consumoSinc, cfg) + "."),
       h("div", { style: { fontSize: 11, color: "#7A7F88", marginTop: 8, lineHeight: 1.5 } },
         (exc || excS)
           ? "El material planificado supera las horas que el programa asigna a esta asignatura. Queda registrado para que la diferencia sea visible antes de producir."
@@ -488,16 +506,22 @@ function App() {
           unidadesIguales(a, r)
             ? detalleUnidad(a, r, 0, "Cómo se compone cada unidad  \u00B7  " + r.n + " unidades iguales")
             : r.unidades.map(function (u, i) { return detalleUnidad(a, r, i, "Unidad " + (i + 1)); }),
-          tablaSimple("Además, en cada unidad",
-            (a.units_data[0].recursos || []).filter(function (rec) { return rec.presup !== "async"; }).map(function (rec) {
-              return { nombre: rec.nombre, desc: rec.desc || "", tiempo: hm(rec.min), gris: rec.presup === "info" };
-            }), null),
-          tablaSimple("Recursos de la asignatura completa", [
-            { nombre: "Video de bienvenida", desc: "Presentación de la asignatura", tiempo: hm(a.bienvenida) },
-            { nombre: "Clase escrita", desc: r.pagTot + " páginas en total, repartidas entre las unidades", tiempo: hm(r.minCC) },
-            { nombre: "Podcast de conclusión", desc: "Cierre de la asignatura", tiempo: hm(a.conclusion) },
-            { nombre: "Examen final", desc: "Evaluación final de la asignatura", tiempo: hm(a.examen) }
-          ], null)) : null);
+          (a.units_data[0].recursos || []).filter(function (rec) { return rec.presup !== "async"; }).length
+            ? tablaSimple("Además, en cada unidad",
+                (a.units_data[0].recursos || []).filter(function (rec) { return rec.presup !== "async"; }).map(function (rec) {
+                  return { nombre: rec.nombre, desc: rec.desc || "", tiempo: hm(rec.min), gris: rec.presup === "info" };
+                }), null)
+            : null,
+          tablaSimple("Recursos de la asignatura completa",
+            [
+              { nombre: "Video de bienvenida", desc: "Presentación de la asignatura", tiempo: hm(a.bienvenida) },
+              { nombre: "Clase escrita", desc: r.pagTot + " páginas en total, repartidas entre las unidades", tiempo: hm(r.minCC) },
+              { nombre: "Podcast de conclusión", desc: "Cierre de la asignatura", tiempo: hm(a.conclusion) }
+            ].concat((a.evals_asig || []).map(function (e) {
+              return { nombre: e.nombre, desc: e.desc || "Evaluación de la asignatura completa", tiempo: hm(e.min) };
+            })).concat([
+              { nombre: "Examen final", desc: "Evaluación final de la asignatura", tiempo: hm(a.examen) }
+            ]), null)) : null);
     });
   }
 
@@ -657,17 +681,55 @@ function App() {
                   style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "3px 10px", fontSize: 10, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit" } }, "Restaurar plantilla estándar")));
           }),
 
-          h("div", { style: { fontSize: 11, fontWeight: 600, color: C.texto, borderBottom: "1px solid #eee", paddingBottom: 3, marginBottom: 4, marginTop: 8 } }, "Examen final \u00B7 síncrono"),
-          h("div", { style: { display: "grid", gridTemplateColumns: "1fr 56px 78px", gap: "2px 8px", fontSize: 12, alignItems: "center", marginBottom: 12 } },
-            h("span", { style: { color: "#666" } }, "Examen final"),
+          h("div", { style: { fontSize: 11, fontWeight: 600, color: C.texto, borderBottom: "1px solid #eee", paddingBottom: 3, marginBottom: 4, marginTop: 8, display: "flex", justifyContent: "space-between" } },
+            h("span", null, "Evaluaciones de la asignatura completa \u00B7 síncrono"),
+            h("span", { style: { fontWeight: 400, color: "#aaa" } }, "no se multiplican por unidad")),
+          (a.evals_asig || []).map(function (e, ei) {
+            var bajoE = e.rango && e.min < e.rango[0];
+            return h("div", { key: "e" + ei, style: { display: "grid", gridTemplateColumns: "1fr 56px 78px 22px", gap: "2px 8px", fontSize: 12, alignItems: "center", padding: "2px 0" } },
+              h(Tx, { v: e.nombre, w: "100%", onChange: function (v) { upd(a.id, function (x) { x.evals_asig[ei].nombre = v; return x; }); } }),
+              h(N, { v: e.min, w: 48, alerta: bajoE, onChange: function (v) { upd(a.id, function (x) { x.evals_asig[ei].min = num(v, 0); return x; }); } }),
+              h("span", { style: { textAlign: "right", color: bajoE ? C.ambar : "#888", fontSize: 10 } },
+                bajoE ? ("mín. " + e.rango[0]) : (e.rango ? e.rango[0] + "\u2013" + e.rango[1] + " min" : e.min + " min")),
+              h("button", { onClick: function () { upd(a.id, function (x) { x.evals_asig.splice(ei, 1); return x; }); }, title: "Quitar",
+                style: { background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 13, fontFamily: "inherit" } }, "\u00D7"));
+          }),
+          h("div", { style: { display: "grid", gridTemplateColumns: "1fr 56px 78px 22px", gap: "2px 8px", fontSize: 12, alignItems: "center", padding: "2px 0", borderTop: "1px dashed #E0E7F0", marginTop: 3 } },
+            h("span", { style: { color: C.texto, fontWeight: 600 } }, "Examen final"),
             h(N, { v: a.examen, w: 48, alerta: a.examen < MIN_EX[0], onChange: function (v) { upd(a.id, function (x) { x.examen = num(v, 0); return x; }); } }),
             h("span", { style: { textAlign: "right", color: a.examen < MIN_EX[0] ? C.ambar : "#888", fontSize: 10 } },
-              a.examen < MIN_EX[0] ? ("mín. " + MIN_EX[0]) : (MIN_EX[0] + "\u2013" + MIN_EX[1] + " min"))),
+              a.examen < MIN_EX[0] ? ("mín. " + MIN_EX[0]) : (MIN_EX[0] + "\u2013" + MIN_EX[1] + " min")),
+            h("span")),
+          h("div", { style: { display: "flex", gap: 8, margin: "6px 0 12px", flexWrap: "wrap" } },
+            h("button", { onClick: function () { upd(a.id, function (x) { x.evals_asig.push({ nombre: "Evaluación formativa", desc: "", min: MIN_FORM[0], rango: MIN_FORM.slice() }); return x; }); },
+              style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "3px 10px", fontSize: 10, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit" } }, "+ Formativa de asignatura"),
+            h("button", { onClick: function () { upd(a.id, function (x) { x.evals_asig.push({ nombre: "Evaluación sumativa", desc: "", min: MIN_SUM[0], rango: MIN_SUM.slice() }); return x; }); },
+              style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "3px 10px", fontSize: 10, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit" } }, "+ Sumativa de asignatura"),
+            h("button", {
+              onClick: function () {
+                upd(a.id, function (x) {
+                  var vistos = {};
+                  x.units_data.forEach(function (u) {
+                    u.recursos = u.recursos.filter(function (rc) {
+                      if (rc.presup !== "sinc") return true;
+                      if (!vistos[rc.nombre]) { vistos[rc.nombre] = rc; }
+                      return false;
+                    });
+                  });
+                  Object.keys(vistos).forEach(function (k) {
+                    var rc = vistos[k];
+                    x.evals_asig.push({ nombre: rc.nombre, desc: rc.desc || "", min: rc.min, rango: rc.rango ? rc.rango.slice() : null });
+                  });
+                  return x;
+                });
+              },
+              style: { background: "#fff", border: "1px solid " + C.azul, borderRadius: 5, padding: "3px 10px", fontSize: 10, color: C.azul, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }
+            }, "Mover evaluaciones a la asignatura")),
 
           h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 } },
             medidor("Asíncrono \u00B7 base de producción", "hora de " + cfg.minProd + " min", r.consumoAsync, r.presupProd, r.pctProd, false),
             medidor("Asíncrono \u00B7 referencia contractual", "hora pedagógica de " + cfg.minPed + " min", r.consumoAsync, r.presupPed, r.pctPed, true),
-            medidor("Síncrono \u00B7 acompañamiento", "evaluaciónes y examen \u00B7 " + cfg.minPed + " min", r.consumoSinc, r.presupSinc, r.pctSinc, false)),
+            medidor("Síncrono \u00B7 acompañamiento", "evaluaciones y examen \u00B7 " + cfg.minPed + " min", r.consumoSinc, r.presupSinc, r.pctSinc, false)),
 
           h("div", { style: { background: "#fff", border: "1px solid #E2E8F0", borderLeft: "3px solid #94A3B8", borderRadius: 6, padding: "10px 12px", fontSize: 12, marginBottom: 8 } },
             h("div", { style: { fontWeight: 600, color: "#475569", marginBottom: 3 } }, "Sobreproducción respecto de la referencia contractual"),
@@ -756,11 +818,11 @@ function App() {
       h("div", { style: { padding: "14px 16px", background: "#F8F9FA", borderBottom: "1px solid " + C.fondo } },
         h("div", { style: { fontSize: 14, fontWeight: 600, color: C.texto } }, "Carga de evaluación sobre las horas de acompañamiento"),
         h("div", { style: { fontSize: 11, color: "#888", marginTop: 2 } },
-          "Formativas y sumativas por unidad más el examen final, medidas contra las horas de apoyo del programa. Ordenado de mayor a menor.")),
+          "Evaluaciones por unidad, evaluaciones de la asignatura completa y examen final, medidas contra las horas de apoyo del programa. Ordenado de mayor a menor.")),
       h("div", { style: { overflowX: "auto" } },
         h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
           h("thead", null, h("tr", { style: { background: "#F8F9FA" } },
-            ["", "Asignatura", "H apoyo", "Evaluaciónes", "Examen", "Total", "Presupuesto", "Estado"].map(function (c2, i) {
+            ["", "Asignatura", "H apoyo", "Por unidad", "Por asignatura", "Examen", "Total", "Presupuesto", "Estado"].map(function (c2, i) {
               return h("th", { key: i, style: { padding: "8px", textAlign: i < 2 ? "left" : "right", fontWeight: 600, color: "#666", fontSize: 10, borderBottom: "1px solid " + C.fondo, whiteSpace: "nowrap" } }, c2);
             }))),
           h("tbody", null, rows.map(function (o) {
@@ -770,7 +832,8 @@ function App() {
               h("td", { style: { padding: "6px 8px" } }, h(Pill, { prog: a.prog })),
               h("td", { style: { padding: "6px 8px" } }, a.nombre, h("div", { style: { fontSize: 10, color: "#aaa" } }, "C" + a.ciclo + " \u00B7 " + r.n + " unidades")),
               h("td", { style: { textAlign: "right", padding: "6px 8px", color: "#666" } }, a.h_apoyo),
-              h("td", { style: { textAlign: "right", padding: "6px 8px" } }, Math.round(r.consumoSinc - a.examen) + " min"),
+              h("td", { style: { textAlign: "right", padding: "6px 8px" } }, Math.round(r.sincUnid) + " min"),
+              h("td", { style: { textAlign: "right", padding: "6px 8px" } }, Math.round(r.sincAsig) + " min"),
               h("td", { style: { textAlign: "right", padding: "6px 8px" } }, a.examen + " min"),
               h("td", { style: { textAlign: "right", padding: "6px 8px", fontWeight: 700 } }, Math.round(r.consumoSinc) + " min"),
               h("td", { style: { textAlign: "right", padding: "6px 8px", color: "#666" } }, Math.round(r.presupSinc) + " min"),
