@@ -49,6 +49,7 @@ var DEF_CFG = {
   minPed: 40,        // hora pedagógica, las horas del programa
   minPag: 7.5,       // minutos por página o pantalla
   pantPorPag: 1,     // pantallas de Rise por página producida
+  pagMinUnidad: 16,  // piso de páginas por unidad
   usdPorPag: 1       // costo interno por página
 };
 function loadCfg() {
@@ -183,12 +184,15 @@ function calc(a, cfg) {
       else fijo += m;
     });
     var dispo = minPorUnidad - fijo;
-    var pagAuto = Math.max(0, Math.round(dispo / cfg.minPag));
+    var pagCalc = Math.max(0, Math.round(dispo / cfg.minPag));
+    var piso = num(cfg.pagMinUnidad, 0);
+    var pagAuto = Math.max(pagCalc, piso);
+    var pisoActivo = pagAuto > pagCalc;
     var esManual = !(u.pag_manual === null || u.pag_manual === undefined || u.pag_manual === "");
     var pag = esManual ? Math.max(0, num(u.pag_manual, pagAuto)) : pagAuto;
     return {
       fijo: fijo, sinc: sinc, info: info, dispo: dispo,
-      pagAuto: pagAuto, pag: pag, manual: esManual,
+      pagAuto: pagAuto, pagCalc: pagCalc, pisoActivo: pisoActivo, pag: pag, manual: esManual,
       minCC: pag * cfg.minPag, totalAsync: fijo + pag * cfg.minPag
     };
   });
@@ -205,6 +209,8 @@ function calc(a, cfg) {
     if (r.presup === "async") asyncAsig += num(r.min, 0); else sincAsig += num(r.min, 0);
   });
   var transv = transvBase + asyncAsig;
+  var hayPiso = false;
+  unidades.forEach(function (u) { if (u.pisoActivo && !u.manual) hayPiso = true; });
   var consumoAsync = transv + fijoUnid + minCC;
   var consumoSinc = sincUnid + sincAsig + num(a.examen, 0);
   var pct = num(a.pct_nuevo, 100) / 100;
@@ -217,7 +223,7 @@ function calc(a, cfg) {
     pagTot: pagTot, pagProducir: Math.round(pagTot * pct),
     pantTot: pagTot * cfg.pantPorPag,
     consumoAsync: consumoAsync, consumoSinc: consumoSinc, infoTot: infoTot,
-    sincUnid: sincUnid, sincAsig: sincAsig, asyncAsig: asyncAsig,
+    sincUnid: sincUnid, sincAsig: sincAsig, asyncAsig: asyncAsig, hayPiso: hayPiso,
     presupProd: presupProd, presupPed: presupPed, presupSinc: presupSinc,
     pctProd: presupProd ? consumoAsync / presupProd * 100 : 0,
     pctPed:  presupPed  ? consumoAsync / presupPed  * 100 : 0,
@@ -431,6 +437,7 @@ function App() {
     cfgRow("Hora de producción", "minProd", "min", "lo comprometido con el docente"),
     cfgRow("Hora pedagógica (referencia contractual)", "minPed", "min", "las horas del programa"),
     cfgRow("Minutos por página o pantalla", "minPag", "min", "estándar de la Universidad"),
+    cfgRow("Mínimo de páginas por unidad", "pagMinUnidad", "páginas", "piso acordado para la clase escrita"),
     cfgRow("Pantallas de Rise por página producida", "pantPorPag", "pantallas", "medir con una asignatura ya montada"),
     cfgRow("Costo por página", "usdPorPag", "USD", "uso interno, nunca en vista Universidad"),
     h("div", { style: { fontSize: 11, color: "#888", marginTop: 8, borderTop: "1px solid #F0F0F0", paddingTop: 8 } },
@@ -538,8 +545,11 @@ function App() {
       barraComposicion(items, u.totalAsync),
       tablaSimple(filas, { nombre: "Total por unidad", tiempo: hm(u.totalAsync) }),
       h("div", { style: { fontSize: 14, color: "#6B7280", marginTop: 10, lineHeight: 1.5 } },
-        "La clase escrita es un documento continuo para toda la asignatura. A esta unidad le corresponden ",
-        h("b", { style: { color: C.texto } }, u.pag + " páginas"), "."));
+        "La clase escrita de esta unidad son ",
+        h("b", { style: { color: C.texto } }, u.pag + " páginas"),
+        u.pisoActivo && !u.manual
+          ? h("span", { style: { color: C.ambar } }, ". Se aplicó el mínimo de " + cfg.pagMinUnidad + " páginas por unidad.")
+          : "."));
   }
 
   /* ---------- Sección 2 · el foro ---------- */
@@ -805,7 +815,6 @@ function App() {
           seccion(4, "Recursos de la asignatura completa", "Se producen una vez, para todo el curso.", false),
           caja(tablaSimple([
             { nombre: "Video de bienvenida", desc: "Presentación de la asignatura", tiempo: hm(a.bienvenida) },
-            { nombre: "Clase escrita", desc: r.pagTot + " páginas en total, repartidas entre las unidades", tiempo: hm(r.minCC) },
             { nombre: "Podcast de conclusión", desc: "Cierre de la asignatura", tiempo: hm(a.conclusion) }
           ].concat((a.units_data[0].recursos || []).filter(function (rc) { return rc.presup === "info"; }).map(function (rc) {
             return { nombre: rc.nombre, desc: rc.desc + " · en cada unidad", tiempo: hm(rc.min), gris: true };
@@ -821,297 +830,171 @@ function App() {
     });
   }
   /* ============================================================
-     VISTA HACKEA
+     VISTA HACKEA · interna
+     Dos pestañas. El objetivo es entender cuántas páginas o
+     pantallas hay que producir en cada unidad, y cuánto cuesta.
      ============================================================ */
+
+  function AlertaPiso(p) {
+    if (!p.activa) return null;
+    return h("span", { title: "Se aplicó el mínimo de " + cfg.pagMinUnidad + " páginas por unidad",
+      style: { fontSize: 10, color: C.ambar, background: C.ambarBg, border: "1px solid #F3D6A6",
+        borderRadius: 10, padding: "1px 7px", marginLeft: 6, whiteSpace: "nowrap" } }, "mínimo");
+  }
+
+  function rangoPag(r) {
+    var p = r.unidades.map(function (u) { return u.pag; });
+    if (!p.length) return "0";
+    var mn = Math.min.apply(null, p), mx = Math.max.apply(null, p);
+    return mn === mx ? String(mn) : (mn + "\u2013" + mx);
+  }
+
+  /* ---------- Pestaña 1 · Asignaturas ---------- */
   function tabAsignaturas() {
-    var totPag = 0, totProd = 0, totExc = 0;
-    filtered.forEach(function (a) { var r = calc(a, cfg); totPag += r.pagTot; totProd += r.pagProducir; totExc += r.excesoPagProducir; });
-    var cols = ["", "Asignatura", "Docente", "H asínc.", "H apoyo", "Unid.", "% nuevo", "Pág/unidad", "Total pág.", "Pág. a producir", "Pantallas", "Base " + cfg.minProd + "'", "Ref. contractual", "Síncrono"];
+    var totPag = 0, totProd = 0;
+    filtered.forEach(function (a) { var r = calc(a, cfg); totPag += r.pagTot; totProd += r.pagProducir; });
+    var cols = ["Programa", "Asignatura", "Docente", "H asínc.", "H apoyo", "Unidades", "% nuevo"];
     return h("div", { style: { background: "#fff", borderRadius: 10, border: "1px solid " + C.fondo, overflow: "hidden" } },
       h("div", { style: { padding: "14px 16px", background: "#F8F9FA", borderBottom: "1px solid " + C.fondo } },
-        h("div", { style: { fontSize: 14, fontWeight: 600, color: C.texto } }, "Asignaturas \u00B7 datos base"),
+        h("div", { style: { fontSize: 14, fontWeight: 600, color: C.texto } }, "Datos base de cada asignatura"),
         h("div", { style: { fontSize: 11, color: "#888", marginTop: 2 } },
-          "% nuevo es la parte que hay que desarrollar cuando la asignatura reutiliza contenido de otra. No afecta el tiempo del estudiante, solo lo que se produce.")),
+          "Horas, unidades y porcentaje de desarrollo nuevo. Las páginas se calculan a partir de esto y se ven en la pestaña siguiente.")),
       h("div", { style: { overflowX: "auto" } },
         h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
           h("thead", null, h("tr", { style: { background: "#F8F9FA" } }, cols.map(function (c2, i) {
-            return h("th", { key: i, style: { padding: "8px", textAlign: i < 3 ? "left" : "right", fontWeight: 600, color: i === 12 ? "#475569" : "#666", fontSize: 10, borderBottom: "1px solid " + C.fondo, whiteSpace: "nowrap" } }, c2);
+            return h("th", { key: i, style: { padding: "8px", textAlign: i < 3 ? "left" : "right", fontWeight: 600, color: "#666", fontSize: 10, borderBottom: "1px solid " + C.fondo, whiteSpace: "nowrap" } }, c2);
           }))),
           h("tbody", null, filtered.map(function (a) {
-            var r = calc(a, cfg);
-            var pags = r.unidades.map(function (u) { return u.pag; });
-            var mn = pags.length ? Math.min.apply(null, pags) : 0;
-            var mx = pags.length ? Math.max.apply(null, pags) : 0;
-            var rango = (mn === mx) ? String(mn) : (mn + "\u2013" + mx);
             return h("tr", { key: a.id, style: { borderBottom: "1px solid #F5F5F5" } },
-              h("td", { style: { padding: "6px 8px" } }, h(Pill, { prog: a.prog }), h("br"), h("span", { style: { fontSize: 9, color: "#bbb" } }, "C" + a.ciclo)),
-              h("td", { style: { padding: "6px 8px", minWidth: 170 } },
+              h("td", { style: { padding: "6px 8px" } }, h(Pill, { prog: a.prog }), h("span", { style: { fontSize: 9, color: "#bbb", marginLeft: 5 } }, "C" + a.ciclo)),
+              h("td", { style: { padding: "6px 8px", minWidth: 190 } },
                 h("div", { style: { fontWeight: 500, color: C.texto } }, a.nombre),
                 a.nota ? h("div", { style: { fontSize: 10, color: "#aaa" } }, a.nota) : null),
-              h("td", { style: { padding: "4px 6px" } }, h(Tx, { v: a.doc, w: 110, ph: "por asignar", onChange: function (v) { upd(a.id, function (x) { x.doc = v; return x; }); } })),
-              h("td", { style: { padding: "4px 4px", textAlign: "right" } }, h(N, { v: a.h_async, w: 42, onChange: function (v) { upd(a.id, function (x) { x.h_async = num(v, 0); return x; }); } })),
-              h("td", { style: { padding: "4px 4px", textAlign: "right" } }, h(N, { v: a.h_apoyo, w: 42, onChange: function (v) { upd(a.id, function (x) { x.h_apoyo = num(v, 0); return x; }); } })),
-              h("td", { style: { padding: "4px 4px", textAlign: "right" } }, h(N, { v: a.uni, w: 36, onChange: function (v) { upd(a.id, function (x) { return setUnidades(x, v); }); } })),
-              h("td", { style: { padding: "4px 4px", textAlign: "right" } }, h(N, { v: a.pct_nuevo, w: 42, accent: a.pct_nuevo !== 100, onChange: function (v) { upd(a.id, function (x) { x.pct_nuevo = Math.max(0, Math.min(100, num(v, 100))); return x; }); } })),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", fontWeight: 600, color: C.azul } }, rango),
-              h("td", { style: { textAlign: "right", padding: "6px 8px" } }, r.pagTot),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", fontWeight: 700, color: a.pct_nuevo !== 100 ? C.azul : C.texto } }, r.pagProducir),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", color: "#666" } }, Math.round(r.pantTot)),
-              h("td", { style: { textAlign: "right", padding: "6px 4px" } }, h(Badge, { p: r.pctProd })),
-              h("td", { style: { textAlign: "right", padding: "6px 4px" } }, h(BadgeRef, { p: r.pctPed })),
-              h("td", { style: { textAlign: "right", padding: "6px 4px" } }, h(BadgeSinc, { p: r.pctSinc, presup: r.presupSinc, consumo: r.consumoSinc })));
-          })),
-          h("tfoot", null, h("tr", { style: { background: "#F8F9FA", fontWeight: 700 } },
-            h("td", { colSpan: 8, style: { padding: "10px 8px" } }, "Totales"),
-            h("td", { style: { textAlign: "right", padding: "10px 8px" } }, totPag),
-            h("td", { style: { textAlign: "right", padding: "10px 8px", color: C.azul } }, totProd),
-            h("td", { style: { textAlign: "right", padding: "10px 8px" } }, Math.round(totProd * cfg.pantPorPag)),
-            h("td", { colSpan: 3, style: { textAlign: "right", padding: "10px 8px", fontWeight: 400, color: "#666", fontSize: 11 } },
-              "Sobre la referencia contractual: " + Math.round(totExc) + " pág \u00B7 USD $" + Math.round(totExc * cfg.usdPorPag)))))));
+              h("td", { style: { padding: "4px 6px" } }, h(Tx, { v: a.doc, w: 120, ph: "por asignar", onChange: function (v) { upd(a.id, function (x) { x.doc = v; return x; }); } })),
+              h("td", { style: { padding: "4px 4px", textAlign: "right" } }, h(N, { v: a.h_async, w: 44, onChange: function (v) { upd(a.id, function (x) { x.h_async = num(v, 0); return x; }); } })),
+              h("td", { style: { padding: "4px 4px", textAlign: "right" } }, h(N, { v: a.h_apoyo, w: 44, onChange: function (v) { upd(a.id, function (x) { x.h_apoyo = num(v, 0); return x; }); } })),
+              h("td", { style: { padding: "4px 4px", textAlign: "right" } }, h(N, { v: a.uni, w: 40, onChange: function (v) { upd(a.id, function (x) { return setUnidades(x, v); }); } })),
+              h("td", { style: { padding: "4px 4px", textAlign: "right" } }, h(N, { v: a.pct_nuevo, w: 44, accent: a.pct_nuevo !== 100, onChange: function (v) { upd(a.id, function (x) { x.pct_nuevo = Math.max(0, Math.min(100, num(v, 100))); return x; }); } })));
+          })))));
   }
 
+  /* ---------- Pestaña 2 · Páginas por unidad ---------- */
   function filaRecurso(a, ui, ri, rec) {
-    var gris = rec.presup === "info";
-    var etiqueta = { async: "Asíncrono", sinc: "Síncrono", info: "No computa" };
-    var bajo = rec.rango && rec.min < rec.rango[0];
-    /* las evaluaciones no se editan aquí: se definen con el docente */
-    if (rec.presup === "sinc") {
-      return h("div", { key: ri, style: { display: "grid", gridTemplateColumns: "1fr 90px 56px 78px 22px", gap: "2px 8px", alignItems: "center", fontSize: 12, padding: "3px 0", color: "#8A8F98" } },
+    if (rec.presup !== "async") {
+      return h("div", { key: ri, style: { display: "grid", gridTemplateColumns: "1fr 60px 60px 24px", gap: 8, alignItems: "center", fontSize: 12, padding: "3px 0", color: "#A8AEB6" } },
         h("span", null, rec.nombre),
-        h("span", { style: { fontSize: 10 } }, "Síncrono"),
-        h("span", { style: { textAlign: "right", fontWeight: 600 } }, rec.min),
-        h("span", { style: { textAlign: "right", fontSize: 10 } }, "min"),
+        h("span", { style: { textAlign: "right" } }, rec.min),
+        h("span", { style: { fontSize: 10 } }, rec.presup === "sinc" ? "síncrono" : "no computa"),
         h("span"));
     }
-    return h("div", { key: ri, style: { display: "grid", gridTemplateColumns: "1fr 90px 56px 78px 22px", gap: "2px 8px", alignItems: "center", fontSize: 12, padding: "2px 0", opacity: gris ? .65 : 1 } },
+    return h("div", { key: ri, style: { display: "grid", gridTemplateColumns: "1fr 60px 60px 24px", gap: 8, alignItems: "center", fontSize: 12, padding: "2px 0" } },
       h(Tx, { v: rec.nombre, w: "100%", onChange: function (v) { upd(a.id, function (x) { x.units_data[ui].recursos[ri].nombre = v; return x; }); } }),
-      h("select", {
-        value: rec.presup,
-        onChange: function (e) { var v = e.target.value; upd(a.id, function (x) { x.units_data[ui].recursos[ri].presup = v; return x; }); },
-        style: { fontSize: 10, padding: "3px 4px", border: "1px solid #ddd", borderRadius: 4, fontFamily: "inherit", color: "#666" }
-      }, ["async", "sinc", "info"].map(function (k) { return h("option", { key: k, value: k }, etiqueta[k]); })),
-      h(N, { v: rec.min, w: 48, alerta: bajo, onChange: function (v) { upd(a.id, function (x) { x.units_data[ui].recursos[ri].min = num(v, 0); return x; }); } }),
-      h("span", { style: { textAlign: "right", color: bajo ? C.ambar : "#888", fontSize: bajo ? 10 : 12 } },
-        bajo ? ("mín. " + rec.rango[0]) : (rec.rango ? rec.rango[0] + "\u2013" + rec.rango[1] + " min" : rec.min + " min")),
-      h("button", {
-        onClick: function () { upd(a.id, function (x) { x.units_data[ui].recursos.splice(ri, 1); return x; }); },
-        title: "Quitar recurso",
-        style: { background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }
-      }, "\u00D7"));
+      h(N, { v: rec.min, w: 52, onChange: function (v) { upd(a.id, function (x) { x.units_data[ui].recursos[ri].min = num(v, 0); return x; }); } }),
+      h("span", { style: { fontSize: 10, color: "#aaa" } }, "min"),
+      h("button", { onClick: function () { upd(a.id, function (x) { x.units_data[ui].recursos.splice(ri, 1); return x; }); }, title: "Quitar",
+        style: { background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 13, fontFamily: "inherit" } }, "\u00D7"));
   }
 
-  function medidor(titulo, sub, consumo, presup, pct, neutro) {
-    return h("div", { style: { flex: "1 1 200px", background: "#fff", border: "1px solid " + C.fondo, borderRadius: 8, padding: "10px 12px" } },
-      h("div", { style: { fontSize: 11, fontWeight: 600, color: neutro ? "#475569" : C.azul } }, titulo),
-      h("div", { style: { fontSize: 10, color: "#aaa", marginBottom: 4 } }, sub),
-      h("div", { style: { fontSize: 16, fontWeight: 700, color: C.texto } }, Math.round(consumo),
-        h("span", { style: { fontSize: 11, fontWeight: 400, color: "#888" } }, " / " + Math.round(presup) + " min")),
-      h(Bar, { p: pct, neutro: neutro }),
-      neutro ? h(BadgeRef, { p: pct }) : h(BadgeSinc, { p: pct, presup: presup, consumo: consumo }));
+  function tabPaginas() {
+    return h("div", null,
+      h("div", { style: { background: "#fff", borderRadius: 10, border: "1px solid " + C.fondo, overflow: "hidden", marginBottom: 12 } },
+        h("div", { style: { padding: "14px 16px", background: "#F8F9FA", borderBottom: "1px solid " + C.fondo } },
+          h("div", { style: { fontSize: 14, fontWeight: 600, color: C.texto } }, "Páginas y pantallas por unidad"),
+          h("div", { style: { fontSize: 11, color: "#888", marginTop: 2 } },
+            "Esto es lo que se le encarga al contenidista. Mínimo de " + cfg.pagMinUnidad + " páginas por unidad. Haz clic en una asignatura para ver o ajustar la estructura de sus unidades.")),
+        h("div", { style: { overflowX: "auto" } },
+          h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
+            h("thead", null, h("tr", { style: { background: "#F8F9FA" } },
+              ["Programa", "Asignatura", "Unid.", "Pág/unidad", "Pantallas/unidad", "Total pág.", "% nuevo", "A producir"].map(function (c2, i) {
+                return h("th", { key: i, style: { padding: "8px", textAlign: i < 2 ? "left" : "right", fontWeight: 600, color: "#666", fontSize: 10, borderBottom: "1px solid " + C.fondo, whiteSpace: "nowrap" } }, c2);
+              }))),
+            h("tbody", null, filtered.map(function (a) {
+              var r = calc(a, cfg);
+              var isO = open === a.id;
+              var pu = r.unidades[0] ? r.unidades[0].pag : 0;
+              return h(React.Fragment, { key: a.id },
+                h("tr", { onClick: function () { setOpen(isO ? null : a.id); },
+                  style: { borderBottom: "1px solid #F5F5F5", cursor: "pointer", background: isO ? "#FAFBFF" : "#fff" } },
+                  h("td", { style: { padding: "8px" } }, h(Pill, { prog: a.prog })),
+                  h("td", { style: { padding: "8px", minWidth: 190 } },
+                    h("div", { style: { fontWeight: 500, color: C.texto } }, a.nombre),
+                    h("div", { style: { fontSize: 10, color: "#aaa" } }, a.h_async + " h asínc. \u00B7 " + (a.doc || "por asignar"))),
+                  h("td", { style: { textAlign: "right", padding: "8px", color: "#666" } }, r.n),
+                  h("td", { style: { textAlign: "right", padding: "8px", fontSize: 14, fontWeight: 700, color: C.azul, whiteSpace: "nowrap" } },
+                    rangoPag(r), h(AlertaPiso, { activa: r.hayPiso })),
+                  h("td", { style: { textAlign: "right", padding: "8px", color: "#666" } }, Math.round(pu * cfg.pantPorPag)),
+                  h("td", { style: { textAlign: "right", padding: "8px", fontWeight: 600 } }, r.pagTot),
+                  h("td", { style: { textAlign: "right", padding: "8px", color: a.pct_nuevo !== 100 ? C.azul : "#ccc" } }, a.pct_nuevo + "%"),
+                  h("td", { style: { textAlign: "right", padding: "8px", fontSize: 14, fontWeight: 700 } }, r.pagProducir)),
+                isO ? h("tr", { key: "d" }, h("td", { colSpan: 8, style: { padding: 0, background: "#FAFBFF" } },
+                  h("div", { style: { padding: "12px 16px 16px" } },
+                    h("div", { style: { fontSize: 11, color: "#888", marginBottom: 10 } },
+                      "Cada unidad dispone de " + hm(r.minPorUnidad) + ". Lo que no ocupan los recursos se convierte en páginas de clase escrita."),
+                    h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 12 } },
+                      r.unidades.map(function (u, i) {
+                        var ud = a.units_data[i];
+                        return h("div", { key: i, style: { background: "#fff", border: "1px solid " + C.fondo, borderRadius: 8, padding: "10px 12px" } },
+                          h("div", { style: { fontSize: 11, fontWeight: 600, color: C.texto, marginBottom: 6, display: "flex", justifyContent: "space-between" } },
+                            h("span", null, "Unidad " + (i + 1)),
+                            h("span", { style: { fontWeight: 400, color: "#aaa" } }, hm(u.totalAsync) + " de " + hm(r.minPorUnidad))),
+                          (ud.recursos || []).map(function (rec, ri) { return filaRecurso(a, i, ri, rec); }),
+                          h("button", { onClick: function () { upd(a.id, function (x) { x.units_data[i].recursos.push({ nombre: "Nuevo recurso", desc: "", min: 15, presup: "async", rango: null }); return x; }); },
+                            style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "3px 10px", fontSize: 10, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit", marginTop: 4 } }, "+ Recurso"),
+                          h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px dashed #E0E7F0", marginTop: 8, paddingTop: 8 } },
+                            h("span", { style: { fontSize: 12, fontWeight: 600, color: C.texto } }, "Clase escrita",
+                              h(AlertaPiso, { activa: u.pisoActivo && !u.manual })),
+                            h("span", { style: { display: "flex", alignItems: "center", gap: 6 } },
+                              h(N, { v: ud.pag_manual, ph: String(u.pagAuto), w: 52, accent: true, onChange: function (v) { upd(a.id, function (x) { x.units_data[i].pag_manual = v; return x; }); } }),
+                              h("span", { style: { fontSize: 10, color: "#aaa" } }, "pág"),
+                              u.manual ? h("button", { onClick: function () { upd(a.id, function (x) { x.units_data[i].pag_manual = null; return x; }); }, title: "Volver al cálculo automático",
+                                style: { background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 12, fontFamily: "inherit" } }, "\u21BA") : null)),
+                          h("div", { style: { fontSize: 10, color: "#aaa", marginTop: 4 } },
+                            Math.round(u.pag * cfg.pantPorPag) + " pantallas \u00B7 " + hm(u.minCC) + " de lectura"));
+                      }))))) : null);
+            })),
+            h("tfoot", null, h("tr", { style: { background: "#F8F9FA", fontWeight: 700 } },
+              h("td", { colSpan: 5, style: { padding: "10px 8px" } }, "Totales"),
+              h("td", { style: { textAlign: "right", padding: "10px 8px" } }, filtered.reduce(function (s, a) { return s + calc(a, cfg).pagTot; }, 0)),
+              h("td", null),
+              h("td", { style: { textAlign: "right", padding: "10px 8px", color: C.azul, fontSize: 14 } }, filtered.reduce(function (s, a) { return s + calc(a, cfg).pagProducir; }, 0))))))));
   }
 
-  function tabMinutos() {
-    return filtered.map(function (a) {
-      var r = calc(a, cfg);
-      var isO = open === a.id;
-      return h("div", { key: a.id, style: { background: "#fff", borderRadius: 10, border: "1px solid " + C.fondo, marginBottom: 8, overflow: "hidden" } },
-        h("div", {
-          onClick: function () { setOpen(isO ? null : a.id); },
-          style: { display: "grid", gridTemplateColumns: "40px 1fr 110px 90px 90px", gap: 8, padding: "10px 16px", alignItems: "center", cursor: "pointer", background: isO ? "#FAFBFF" : "#fff" }
-        },
-          h(Pill, { prog: a.prog }),
-          h("div", null,
-            h("div", { style: { fontSize: 13, fontWeight: 500, color: C.texto } }, a.nombre),
-            h("div", { style: { fontSize: 10, color: "#999" } },
-              "C" + a.ciclo + " \u00B7 " + r.n + " unidades \u00B7 " + a.h_async + " h asínc. \u00B7 " + a.h_apoyo + " h apoyo \u00B7 " + (a.doc || "por asignar"))),
-          h("div", { style: { textAlign: "right" } },
-            h("div", { style: { fontSize: 14, fontWeight: 700, color: C.texto } }, r.pagTot + " pág"),
-            h("div", { style: { fontSize: 10, color: "#999" } }, a.pct_nuevo !== 100 ? ("produce " + r.pagProducir) : (Math.round(r.pantTot) + " pantallas"))),
-          h("div", null, h("div", { style: { fontSize: 9, color: "#aaa" } }, "Base " + cfg.minProd + "'"), h(Badge, { p: r.pctProd })),
-          h("div", null, h("div", { style: { fontSize: 9, color: "#aaa" } }, "Ref. contractual"), h(BadgeRef, { p: r.pctPed }))),
-
-        isO ? h("div", { style: { padding: "0 16px 16px", background: "#FAFBFF" } },
-          h("div", { style: { display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center", fontSize: 12, margin: "4px 0 12px" } },
-            h("label", { style: { display: "flex", alignItems: "center", gap: 4, color: "#666" } }, "Unidades",
-              h(N, { v: a.uni, w: 36, onChange: function (v) { upd(a.id, function (x) { return setUnidades(x, v); }); } })),
-            h("label", { style: { display: "flex", alignItems: "center", gap: 4, color: "#666" } }, "H asíncronas",
-              h(N, { v: a.h_async, w: 42, onChange: function (v) { upd(a.id, function (x) { x.h_async = num(v, 0); return x; }); } })),
-            h("label", { style: { display: "flex", alignItems: "center", gap: 4, color: "#666" } }, "H apoyo",
-              h(N, { v: a.h_apoyo, w: 42, onChange: function (v) { upd(a.id, function (x) { x.h_apoyo = num(v, 0); return x; }); } })),
-            h("label", { style: { display: "flex", alignItems: "center", gap: 4, color: "#666" } }, "% nuevo",
-              h(N, { v: a.pct_nuevo, w: 42, accent: a.pct_nuevo !== 100, onChange: function (v) { upd(a.id, function (x) { x.pct_nuevo = Math.max(0, Math.min(100, num(v, 100))); return x; }); } })),
-            h("label", { style: { display: "flex", alignItems: "center", gap: 4, color: "#666", flex: "1 1 220px" } }, "Nota",
-              h(Tx, { v: a.nota, w: "100%", ph: "ej: reutiliza contenido de MPCG Control estratégico", onChange: function (v) { upd(a.id, function (x) { x.nota = v; return x; }); } }))),
-          h("div", { style: { fontSize: 11, color: "#aaa", marginBottom: 10 } },
-            "Cada unidad dispone de " + hm(r.minPorUnidad) + " (" + a.h_async + " h \u00D7 " + cfg.minProd + " min \u00F7 " + r.n + " unidades)"),
-
-          h("div", { style: { fontSize: 11, fontWeight: 600, color: C.azul, borderBottom: "1px solid #E0E7F0", paddingBottom: 3, marginBottom: 6 } }, "Recursos transversales"),
-          h("div", { style: { display: "grid", gridTemplateColumns: "1fr 56px 78px", gap: "2px 8px", fontSize: 12, alignItems: "center", marginBottom: 10 } },
-            h("span", { style: { color: "#666" } }, "Video de bienvenida"),
-            h(N, { v: a.bienvenida, w: 48, onChange: function (v) { upd(a.id, function (x) { x.bienvenida = num(v, 0); return x; }); } }),
-            h("span", { style: { textAlign: "right", color: "#888" } }, a.bienvenida + " min"),
-            h("span", { style: { color: "#666" } }, "Podcast de conclusión"),
-            h(N, { v: a.conclusion, w: 48, onChange: function (v) { upd(a.id, function (x) { x.conclusion = num(v, 0); return x; }); } }),
-            h("span", { style: { textAlign: "right", color: "#888" } }, a.conclusion + " min"),
-            h("span", { style: { color: "#666" } }, "Recursos complementarios"),
-            h(N, { v: a.complementarios, w: 48, onChange: function (v) { upd(a.id, function (x) { x.complementarios = num(v, 0); return x; }); } }),
-            h("span", { style: { textAlign: "right", color: "#888" } }, a.complementarios + " min")),
-
-          h("div", { style: { background: "#F0F8FF", borderLeft: "3px solid " + C.azul, padding: "10px 12px", borderRadius: 4, fontSize: 11, color: "#333", marginBottom: 12 } },
-            h("b", null, "Clase escrita \u00B7 recurso transversal. "),
-            "Un solo documento continuo para toda la asignatura. Su tiempo de lectura tributa a cada unidad: abajo se indica cuántas páginas corresponden a cada una.",
-            h("div", { style: { marginTop: 6, fontWeight: 600, color: C.texto } },
-              r.pagTot + " páginas \u00B7 " + Math.round(r.pantTot) + " pantallas \u00B7 " + hm(r.minCC) + " de lectura" +
-              (a.pct_nuevo !== 100 ? "  \u00B7  a producir: " + r.pagProducir + " páginas (" + a.pct_nuevo + "%)" : ""))),
-
-          r.unidades.map(function (u, i) {
-            var ud = a.units_data[i];
-            return h("div", { key: i, style: { marginBottom: 10 } },
-              h("div", { style: { fontSize: 11, fontWeight: 600, color: C.texto, borderBottom: "1px solid #eee", paddingBottom: 3, marginBottom: 4, display: "flex", justifyContent: "space-between" } },
-                h("span", null, "Unidad " + (i + 1)),
-                h("span", { style: { fontWeight: 400, color: "#aaa" } }, "Asíncrono " + hm(u.totalAsync) + " de " + hm(r.minPorUnidad) + "  \u00B7  Síncrono " + hm(u.sinc))),
-              (ud.recursos || []).map(function (rec, ri) { return filaRecurso(a, i, ri, rec); }),
-              h("div", { style: { display: "grid", gridTemplateColumns: "1fr 90px 56px 78px 22px", gap: "2px 8px", alignItems: "center", fontSize: 12, padding: "4px 0", borderTop: "1px dashed #E0E7F0", marginTop: 3 } },
-                h("span", { style: { color: C.texto, fontWeight: 600 } }, "Clase escrita",
-                  h("span", { style: { fontWeight: 400, color: "#999", fontSize: 10 } }, "  (transversal \u00B7 páginas de esta unidad)")),
-                h("span", { style: { fontSize: 10, color: "#aaa" } }, u.manual ? "manual" : "automático"),
-                h(N, { v: ud.pag_manual, ph: String(u.pagAuto), w: 48, accent: true, onChange: function (v) { upd(a.id, function (x) { x.units_data[i].pag_manual = v; return x; }); } }),
-                h("span", { style: { textAlign: "right", fontWeight: 600, color: C.azul } }, Math.round(u.minCC) + " min"),
-                u.manual ? h("button", { onClick: function () { upd(a.id, function (x) { x.units_data[i].pag_manual = null; return x; }); }, title: "Volver al cálculo automático", style: { background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 12, fontFamily: "inherit" } }, "\u21BA") : h("span")),
-              h("div", { style: { display: "flex", gap: 8, marginTop: 4 } },
-                h("button", { onClick: function () { upd(a.id, function (x) { x.units_data[i].recursos.push({ nombre: "Nuevo recurso", desc: "", min: 15, presup: "async", rango: null }); return x; }); },
-                  style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "3px 10px", fontSize: 10, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit" } }, "+ Agregar recurso"),
-                h("button", { onClick: function () { upd(a.id, function (x) { x.units_data[i] = mkUnit(); return x; }); },
-                  style: { background: "none", border: "1px dashed #cfd8e3", borderRadius: 5, padding: "3px 10px", fontSize: 10, color: "#8a94a6", cursor: "pointer", fontFamily: "inherit" } }, "Restaurar plantilla estándar")));
-          }),
-
-          h("div", { style: { fontSize: 11, fontWeight: 600, color: C.texto, borderBottom: "1px solid #eee", paddingBottom: 3, marginBottom: 4, marginTop: 8 } }, "Evaluaciones \u00B7 síncrono"),
-          h("div", { style: { background: "#F8F9FA", borderRadius: 6, padding: "8px 12px", fontSize: 11, color: "#666", marginBottom: 12 } },
-            h("div", { style: { display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 } },
-              h("span", null, "Por unidad: ", h("b", { style: { color: C.texto } }, Math.round(r.sincUnid) + " min"),
-                "  \u00B7  Por asignatura: ", h("b", { style: { color: C.texto } }, Math.round(r.sincAsig) + " min"),
-                "  \u00B7  Examen: ", h("b", { style: { color: C.texto } }, a.examen + " min")),
-              h("b", { style: { color: C.texto } }, "Total " + Math.round(r.consumoSinc) + " min")),
-            h("div", { style: { color: "#aaa", marginTop: 4 } },
-              "Las evaluaciones se definen con el docente en la reunión inicial. Se editan en la Vista Universidad.")),
-
-          h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 } },
-            medidor("Asíncrono \u00B7 base de producción", "hora de " + cfg.minProd + " min", r.consumoAsync, r.presupProd, r.pctProd, false),
-            medidor("Asíncrono \u00B7 referencia contractual", "hora pedagógica de " + cfg.minPed + " min", r.consumoAsync, r.presupPed, r.pctPed, true),
-            medidor("Síncrono \u00B7 acompañamiento", "evaluaciones y examen \u00B7 " + cfg.minPed + " min", r.consumoSinc, r.presupSinc, r.pctSinc, false)),
-
-          h("div", { style: { background: "#fff", border: "1px solid #E2E8F0", borderLeft: "3px solid #94A3B8", borderRadius: 6, padding: "10px 12px", fontSize: 12, marginBottom: 8 } },
-            h("div", { style: { fontWeight: 600, color: "#475569", marginBottom: 3 } }, "Sobreproducción respecto de la referencia contractual"),
-            h("div", { style: { color: "#666" } },
-              hm(r.excesoMin) + "  \u00B7  " + r.excesoHrsPed.toFixed(1) + " horas pedagógicas  \u00B7  " + Math.round(r.excesoPagProducir) + " páginas a producir  \u00B7  USD $" + Math.round(r.excesoUsd)),
-            h("div", { style: { color: "#94A3B8", fontSize: 11, marginTop: 4 } },
-              "El contenido se produce con la hora de " + cfg.minProd + " minutos, que es lo comprometido con el docente. Medido contra las horas pedagógicas del programa, esa diferencia es material que Hackea desarrolla por sobre lo contratado.")),
-
-          h("div", { style: { background: "#F8F9FA", borderRadius: 6, padding: "10px 12px", fontSize: 12, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6 } },
-            h("span", { style: { color: "#666" } }, "Tiempo total del estudiante, incluida la bibliografía obligatoria (" + hm(r.infoTot) + ", recurso de la Universidad)"),
-            h("b", { style: { color: C.texto } }, hm(r.totalEstudiante)))
-        ) : null);
-    });
-  }
-
-  function tabPáginas() {
-    return h("div", { style: { background: "#fff", borderRadius: 10, border: "1px solid " + C.fondo, overflow: "hidden" } },
-      h("div", { style: { padding: "14px 16px", background: "#F8F9FA", borderBottom: "1px solid " + C.fondo } },
-        h("div", { style: { fontSize: 14, fontWeight: 600, color: C.texto } }, "Páginas de desarrollo \u00B7 encargo a contenidista"),
-        h("div", { style: { fontSize: 11, color: "#888", marginTop: 2 } }, "Pag. a producir es lo que corresponde encargar. Cuando la asignatura reutiliza contenido, es menor que el total.")),
-      h("div", { style: { overflowX: "auto" } },
-        h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
-          h("thead", null, h("tr", { style: { background: "#F8F9FA" } },
-            ["", "Asignatura", "Unid.", "Pág/unidad", "Total pág.", "% nuevo", "Pág. a producir", "Pantallas"].map(function (c2, i) {
-              return h("th", { key: i, style: { padding: "8px", textAlign: i < 2 ? "left" : "right", fontWeight: 600, color: "#666", fontSize: 10, borderBottom: "1px solid " + C.fondo, whiteSpace: "nowrap" } }, c2);
-            }))),
-          h("tbody", null, filtered.map(function (a) {
-            var r = calc(a, cfg);
-            var pags = r.unidades.map(function (u) { return u.pag; });
-            var mn = pags.length ? Math.min.apply(null, pags) : 0;
-            var mx = pags.length ? Math.max.apply(null, pags) : 0;
-            return h("tr", { key: a.id, style: { borderBottom: "1px solid #F5F5F5" } },
-              h("td", { style: { padding: "6px 8px" } }, h(Pill, { prog: a.prog })),
-              h("td", { style: { padding: "6px 8px" } },
-                h("div", { style: { fontWeight: 500 } }, a.nombre),
-                h("div", { style: { fontSize: 10, color: "#aaa" } }, "C" + a.ciclo + " \u00B7 " + (a.doc || "por asignar"))),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", color: "#666" } }, r.n),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", color: C.azul, fontWeight: 600 } }, mn === mx ? mn : (mn + "\u2013" + mx)),
-              h("td", { style: { textAlign: "right", padding: "6px 8px" } }, r.pagTot),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", color: a.pct_nuevo !== 100 ? C.azul : "#aaa" } }, a.pct_nuevo + "%"),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", fontWeight: 700 } }, r.pagProducir),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", color: "#666" } }, Math.round(r.pagProducir * cfg.pantPorPag)));
-          })),
-          h("tfoot", null, h("tr", { style: { background: "#F8F9FA", fontWeight: 700 } },
-            h("td", { colSpan: 4, style: { padding: "10px 8px" } }, "Totales"),
-            h("td", { style: { textAlign: "right", padding: "10px 8px" } }, filtered.reduce(function (s, a) { return s + calc(a, cfg).pagTot; }, 0)),
-            h("td", null),
-            h("td", { style: { textAlign: "right", padding: "10px 8px", color: C.azul } }, filtered.reduce(function (s, a) { return s + calc(a, cfg).pagProducir; }, 0)),
-            h("td", { style: { textAlign: "right", padding: "10px 8px" } }, Math.round(filtered.reduce(function (s, a) { return s + calc(a, cfg).pagProducir; }, 0) * cfg.pantPorPag)))))));
-  }
-
+  /* ---------- Pestaña 3 · Costos ---------- */
   function tabCostos() {
     var tot = 0, totExc = 0;
     filtered.forEach(function (a) { var r = calc(a, cfg); tot += r.pagProducir; totExc += r.excesoPagProducir; });
     return h("div", null,
       h("div", { style: { background: C.ambarBg, border: "1px solid #F3D6A6", color: C.ambar, borderRadius: 8, padding: "8px 12px", fontSize: 11, marginBottom: 10, fontWeight: 600 } },
-        "Uso interno de Hackea. Esta pestaña no existe en la vista Universidad."),
+        "Uso interno de Hackea. No existe en la vista Universidad."),
       h("div", { style: { background: "#fff", borderRadius: 10, border: "1px solid " + C.fondo, overflow: "hidden" } },
-        h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
-          h("thead", null, h("tr", { style: { background: "#F8F9FA" } },
-            ["", "Asignatura", "Pág. a producir", "USD", "Sobre contrato (pág)", "Sobre contrato (USD)"].map(function (c2, i) {
-              return h("th", { key: i, style: { padding: "8px", textAlign: i < 2 ? "left" : "right", fontWeight: 600, color: "#666", fontSize: 10, borderBottom: "1px solid " + C.fondo, whiteSpace: "nowrap" } }, c2);
-            }))),
-          h("tbody", null, filtered.map(function (a) {
-            var r = calc(a, cfg);
-            return h("tr", { key: a.id, style: { borderBottom: "1px solid #F5F5F5" } },
-              h("td", { style: { padding: "6px 8px" } }, h(Pill, { prog: a.prog })),
-              h("td", { style: { padding: "6px 8px" } }, a.nombre, h("span", { style: { fontSize: 10, color: "#aaa" } }, "  C" + a.ciclo)),
-              h("td", { style: { textAlign: "right", padding: "6px 8px" } }, r.pagProducir),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", fontWeight: 700, color: C.azul } }, "$" + Math.round(r.pagProducir * cfg.usdPorPag)),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", color: C.ambar } }, Math.round(r.excesoPagProducir)),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", color: C.ambar, fontWeight: 600 } }, "$" + Math.round(r.excesoUsd)));
-          })),
-          h("tfoot", null, h("tr", { style: { background: "#F8F9FA", fontWeight: 700 } },
-            h("td", { colSpan: 2, style: { padding: "10px 8px" } }, "Total"),
-            h("td", { style: { textAlign: "right", padding: "10px 8px" } }, tot),
-            h("td", { style: { textAlign: "right", padding: "10px 8px", color: C.azul, fontSize: 14 } }, "$" + Math.round(tot * cfg.usdPorPag)),
-            h("td", { style: { textAlign: "right", padding: "10px 8px", color: C.ambar } }, Math.round(totExc)),
-            h("td", { style: { textAlign: "right", padding: "10px 8px", color: C.ambar, fontSize: 14 } }, "$" + Math.round(totExc * cfg.usdPorPag)))))));
-  }
-
-  function tabEval() {
-    var rows = filtered.map(function (a) { return { a: a, r: calc(a, cfg) }; })
-      .sort(function (x, y) { return y.r.pctSinc - x.r.pctSinc; });
-    return h("div", { style: { background: "#fff", borderRadius: 10, border: "1px solid " + C.fondo, overflow: "hidden" } },
-      h("div", { style: { padding: "14px 16px", background: "#F8F9FA", borderBottom: "1px solid " + C.fondo } },
-        h("div", { style: { fontSize: 14, fontWeight: 600, color: C.texto } }, "Carga de evaluación sobre las horas de acompañamiento"),
-        h("div", { style: { fontSize: 11, color: "#888", marginTop: 2 } },
-          "Evaluaciones por unidad, evaluaciones de la asignatura completa y examen final, medidas contra las horas de apoyo del programa. Ordenado de mayor a menor.")),
-      h("div", { style: { overflowX: "auto" } },
-        h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
-          h("thead", null, h("tr", { style: { background: "#F8F9FA" } },
-            ["", "Asignatura", "H apoyo", "Por unidad", "Por asignatura", "Examen", "Total", "Presupuesto", "Estado"].map(function (c2, i) {
-              return h("th", { key: i, style: { padding: "8px", textAlign: i < 2 ? "left" : "right", fontWeight: 600, color: "#666", fontSize: 10, borderBottom: "1px solid " + C.fondo, whiteSpace: "nowrap" } }, c2);
-            }))),
-          h("tbody", null, rows.map(function (o) {
-            var a = o.a, r = o.r;
-            var alto = r.pctSinc > 115 || (r.presupSinc === 0 && r.consumoSinc > 0);
-            return h("tr", { key: a.id, style: { borderBottom: "1px solid #F5F5F5", background: alto ? C.ambarBg : "#fff" } },
-              h("td", { style: { padding: "6px 8px" } }, h(Pill, { prog: a.prog })),
-              h("td", { style: { padding: "6px 8px" } }, a.nombre, h("div", { style: { fontSize: 10, color: "#aaa" } }, "C" + a.ciclo + " \u00B7 " + r.n + " unidades")),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", color: "#666" } }, a.h_apoyo),
-              h("td", { style: { textAlign: "right", padding: "6px 8px" } }, Math.round(r.sincUnid) + " min"),
-              h("td", { style: { textAlign: "right", padding: "6px 8px" } }, Math.round(r.sincAsig) + " min"),
-              h("td", { style: { textAlign: "right", padding: "6px 8px" } }, a.examen + " min"),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", fontWeight: 700 } }, Math.round(r.consumoSinc) + " min"),
-              h("td", { style: { textAlign: "right", padding: "6px 8px", color: "#666" } }, Math.round(r.presupSinc) + " min"),
-              h("td", { style: { textAlign: "right", padding: "6px 4px" } }, h(BadgeSinc, { p: r.pctSinc, presup: r.presupSinc, consumo: r.consumoSinc })));
-          })))));
+        h("div", { style: { overflowX: "auto" } },
+          h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
+            h("thead", null, h("tr", { style: { background: "#F8F9FA" } },
+              ["Programa", "Asignatura", "A producir", "USD", "Sobre contrato (pág)", "Sobre contrato (USD)"].map(function (c2, i) {
+                return h("th", { key: i, style: { padding: "8px", textAlign: i < 2 ? "left" : "right", fontWeight: 600, color: "#666", fontSize: 10, borderBottom: "1px solid " + C.fondo, whiteSpace: "nowrap" } }, c2);
+              }))),
+            h("tbody", null, filtered.map(function (a) {
+              var r = calc(a, cfg);
+              return h("tr", { key: a.id, style: { borderBottom: "1px solid #F5F5F5" } },
+                h("td", { style: { padding: "6px 8px" } }, h(Pill, { prog: a.prog })),
+                h("td", { style: { padding: "6px 8px" } }, a.nombre, h("span", { style: { fontSize: 10, color: "#aaa" } }, "  C" + a.ciclo)),
+                h("td", { style: { textAlign: "right", padding: "6px 8px" } }, r.pagProducir),
+                h("td", { style: { textAlign: "right", padding: "6px 8px", fontWeight: 700, color: C.azul } }, "$" + Math.round(r.pagProducir * cfg.usdPorPag)),
+                h("td", { style: { textAlign: "right", padding: "6px 8px", color: C.ambar } }, Math.round(r.excesoPagProducir)),
+                h("td", { style: { textAlign: "right", padding: "6px 8px", color: C.ambar, fontWeight: 600 } }, "$" + Math.round(r.excesoUsd)));
+            })),
+            h("tfoot", null, h("tr", { style: { background: "#F8F9FA", fontWeight: 700 } },
+              h("td", { colSpan: 2, style: { padding: "10px 8px" } }, "Total"),
+              h("td", { style: { textAlign: "right", padding: "10px 8px" } }, tot),
+              h("td", { style: { textAlign: "right", padding: "10px 8px", color: C.azul, fontSize: 14 } }, "$" + Math.round(tot * cfg.usdPorPag)),
+              h("td", { style: { textAlign: "right", padding: "10px 8px", color: C.ambar } }, Math.round(totExc)),
+              h("td", { style: { textAlign: "right", padding: "10px 8px", color: C.ambar, fontSize: 14 } }, "$" + Math.round(totExc * cfg.usdPorPag))))))),
+      h("div", { style: { fontSize: 11, color: "#aaa", marginTop: 8, lineHeight: 1.5 } },
+        "\"Sobre contrato\" es lo que se produce por encima de las horas pedagógicas del programa, medido en páginas y en dinero."));
   }
 
   /* ---------- Navegacion ---------- */
-  var tabsInternas = ["Asignaturas", "Minutos de consumo", "Páginas contenidista", "Costos", "Carga de evaluación"];
+  var tabsInternas = ["Asignaturas", "Páginas por unidad", "Costos"];
   var navTabs = interna ? h("div", { className: "no-print", style: { display: "flex", borderBottom: "2px solid " + C.fondo, marginBottom: 14, overflowX: "auto" } },
     tabsInternas.map(function (tt, i) {
       return h("button", {
@@ -1134,10 +1017,8 @@ function App() {
   var contenido;
   if (!interna) contenido = vistaUniversidad();
   else if (tab === 0) contenido = tabAsignaturas();
-  else if (tab === 1) contenido = tabMinutos();
-  else if (tab === 2) contenido = tabPáginas();
-  else if (tab === 3) contenido = tabCostos();
-  else contenido = tabEval();
+  else if (tab === 1) contenido = tabPaginas();
+  else contenido = tabCostos();
 
   return h("div", { style: { maxWidth: 1240, margin: "0 auto", padding: "20px 16px", minHeight: "100vh" } },
     header, avisoError, panelCfg, navTabs, filtros, contenido,
